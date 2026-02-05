@@ -105,7 +105,7 @@ export async function POST(req: Request) {
           reference,
 
           /* redirect back here for fallback verify */
-          callback_url: `${BASE_URL}/api/paystack/unlock-lead?reference=${reference}`,
+          callback_url: `${BASE_URL}/vendor/dashboard`,
 
           metadata: {
             type,
