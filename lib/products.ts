@@ -1,6 +1,7 @@
 // /lib/products.ts
 
-import { supabase } from "@/lib/supabase"
+import { supabase } from "@/lib/supabase-client";
+
 
 export async function getProducts() {
   const { data, error } = await supabase
