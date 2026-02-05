@@ -2,33 +2,60 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
 /* =====================================================
-   SAFE SUPABASE FACTORY (NO TOP LEVEL INIT)
-   prevents Vercel build crash
+   REQUIRED FOR PAYSTACK + RENDER
+===================================================== */
+
+export const dynamic = "force-dynamic";
+
+/* =====================================================
+   SAFE SUPABASE FACTORY
 ===================================================== */
 
 function getSupabase() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+
+  if (!url || !key) {
+    throw new Error("Missing Supabase env vars");
+  }
+
+  return createClient(url, key, {
+    auth: { persistSession: false },
+  });
 }
 
 /* =====================================================
-   BASE URL
+   ENV
 ===================================================== */
 
 const BASE_URL =
-  process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+  process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
+
+const PAYSTACK_SECRET = process.env.PAYSTACK_SECRET_KEY;
 
 /* =====================================================
-   POST → Initialize Paystack payment
-   supports:
-   - lead unlock
-   - vendor subscription
+   HELPERS
+===================================================== */
+
+function buildReference(type: string, vendorId: string) {
+  return `${type}_${vendorId}_${Date.now()}_${Math.random()
+    .toString(36)
+    .slice(2, 8)}`;
+}
+
+/* =====================================================
+   POST → INITIALIZE PAYMENT
 ===================================================== */
 
 export async function POST(req: Request) {
   try {
+    if (!PAYSTACK_SECRET) {
+      return NextResponse.json(
+        { error: "Payment not configured" },
+        { status: 500 }
+      );
+    }
+
     const body = await req.json();
 
     const {
@@ -37,31 +64,49 @@ export async function POST(req: Request) {
       leadId,
       plan,
       amount,
-      type, // "lead" | "vendor_plan"
+      type, // "lead_unlock" | "vendor_plan"
     } = body;
 
-    if (!vendorId || !type || !amount) {
+    /* ===============================
+       VALIDATION
+    =============================== */
+
+    if (!vendorId || !amount || !type) {
       return NextResponse.json(
-        { error: "Missing required params" },
+        { error: "Missing required parameters" },
         { status: 400 }
       );
     }
 
-    const reference = `${type}_${vendorId}_${Date.now()}`;
+    const reference = buildReference(type, vendorId);
+
+    console.log("🚀 Initializing Paystack:", {
+      reference,
+      type,
+      vendorId,
+      amount,
+    });
+
+    /* ===============================
+       CALL PAYSTACK
+    =============================== */
 
     const res = await fetch(
       "https://api.paystack.co/transaction/initialize",
       {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
+          Authorization: `Bearer ${PAYSTACK_SECRET}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
           email: email || "pay@greenfarm.ng",
-          amount: amount * 100, // kobo
+          amount: Math.round(amount * 100), // kobo
           reference,
-          callback_url: `${BASE_URL}/api/paystack/unlock-lead`,
+
+          /* redirect back here for fallback verify */
+          callback_url: `${BASE_URL}/api/paystack/unlock-lead?reference=${reference}`,
+
           metadata: {
             type,
             vendorId,
@@ -74,11 +119,20 @@ export async function POST(req: Request) {
 
     const data = await res.json();
 
+    if (!data?.data?.authorization_url) {
+      console.error("❌ Paystack init failed:", data);
+      return NextResponse.json(
+        { error: "Failed to initialize payment" },
+        { status: 500 }
+      );
+    }
+
     return NextResponse.json({
-      url: data?.data?.authorization_url,
+      url: data.data.authorization_url,
+      reference,
     });
   } catch (err) {
-    console.error("Paystack init error:", err);
+    console.error("❌ Paystack init crash:", err);
 
     return NextResponse.json(
       { error: "Failed to initialize payment" },
@@ -88,12 +142,12 @@ export async function POST(req: Request) {
 }
 
 /* =====================================================
-   GET → Verify + process payment
-   (FINTECH STANDARD FLOW)
+   GET → VERIFY (BACKUP ONLY)
+   Webhook is primary processor
 ===================================================== */
 
 export async function GET(req: Request) {
-  const supabase = getSupabase(); // ✅ INIT HERE ONLY
+  const supabase = getSupabase();
 
   try {
     const { searchParams } = new URL(req.url);
@@ -103,48 +157,80 @@ export async function GET(req: Request) {
       return NextResponse.redirect(`${BASE_URL}/vendor/dashboard`);
     }
 
-    /* =============================
-       VERIFY TRANSACTION
-    ============================= */
+    console.log("🔎 Verifying fallback:", reference);
+
+    /* ===============================
+       VERIFY WITH PAYSTACK
+    =============================== */
 
     const verify = await fetch(
       `https://api.paystack.co/transaction/verify/${reference}`,
       {
         headers: {
-          Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
+          Authorization: `Bearer ${PAYSTACK_SECRET}`,
         },
       }
     );
 
     const result = await verify.json();
 
-    console.log("VERIFY RESULT:", result);
-
     if (result?.data?.status !== "success") {
+      return NextResponse.redirect(`${BASE_URL}/vendor/dashboard`);
+    }
+
+    /* ===============================
+       DUPLICATE PROTECTION
+    =============================== */
+
+    const { data: existing } = await supabase
+      .from("payments")
+      .select("reference")
+      .eq("reference", reference)
+      .maybeSingle();
+
+    if (existing) {
+      console.log("⚠️ Already processed (webhook handled)");
       return NextResponse.redirect(`${BASE_URL}/vendor/dashboard`);
     }
 
     const meta = result.data.metadata;
 
-    /* =============================
-       LEAD UNLOCK
-    ============================= */
+    const amount = result.data.amount / 100;
 
-    if (meta.type === "lead") {
-      await supabase.from("lead_unlocks").insert({
-        vendor_id: meta.vendorId,
-        lead_id: meta.leadId,
-        paid: true,
-        amount: result.data.amount / 100,
-        paystack_ref: reference,
-      });
+    /* ===============================
+       LOG PAYMENT FIRST
+    =============================== */
+
+    await supabase.from("payments").insert({
+      reference,
+      amount,
+      gateway: "paystack",
+      status: "success",
+      raw: result,
+    });
+
+    /* ===============================
+       LEAD UNLOCK
+    =============================== */
+
+    if (meta?.type === "lead_unlock" && meta.vendorId && meta.leadId) {
+      await supabase.from("lead_unlocks").upsert(
+        {
+          vendor_id: meta.vendorId,
+          lead_id: meta.leadId,
+          paid: true,
+          amount,
+          paystack_ref: reference,
+        },
+        { onConflict: "vendor_id,lead_id" }
+      );
     }
 
-    /* =============================
-       VENDOR SUBSCRIPTION
-    ============================= */
+    /* ===============================
+       VENDOR PLAN
+    =============================== */
 
-    if (meta.type === "vendor_plan") {
+    if (meta?.type === "vendor_plan" && meta.vendorId) {
       const expires = new Date();
       expires.setDate(expires.getDate() + 30);
 
@@ -168,9 +254,11 @@ export async function GET(req: Request) {
         .eq("id", meta.vendorId);
     }
 
+    console.log("✅ Fallback verify processed:", reference);
+
     return NextResponse.redirect(`${BASE_URL}/vendor/dashboard`);
   } catch (err) {
-    console.error("Verify error:", err);
+    console.error("❌ Verify crash:", err);
 
     return NextResponse.redirect(`${BASE_URL}/vendor/dashboard`);
   }

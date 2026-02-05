@@ -34,10 +34,51 @@ declare global {
 }
 
 /* =====================================================
-   WAIT FOR SCRIPT (robust)
+   CONSTANTS
 ===================================================== */
 
-function waitForPaystack(): Promise<PaystackPop> {
+const PAYSTACK_SRC = "https://js.paystack.co/v1/inline.js";
+
+/* =====================================================
+   LOAD SCRIPT (auto inject if missing)
+===================================================== */
+
+function loadPaystackScript(): Promise<void> {
+  return new Promise((resolve, reject) => {
+    // already loaded
+    if (window.PaystackPop) return resolve();
+
+    const existing = document.querySelector(
+      `script[src="${PAYSTACK_SRC}"]`
+    );
+
+    if (existing) {
+      existing.addEventListener("load", () => resolve());
+      existing.addEventListener("error", () =>
+        reject(new Error("Paystack script failed to load"))
+      );
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = PAYSTACK_SRC;
+    script.async = true;
+
+    script.onload = () => resolve();
+    script.onerror = () =>
+      reject(new Error("Paystack script failed to load"));
+
+    document.body.appendChild(script);
+  });
+}
+
+/* =====================================================
+   WAIT FOR PAYSTACK
+===================================================== */
+
+async function waitForPaystack(): Promise<PaystackPop> {
+  await loadPaystackScript();
+
   return new Promise((resolve, reject) => {
     let tries = 0;
 
@@ -50,27 +91,33 @@ function waitForPaystack(): Promise<PaystackPop> {
         return;
       }
 
-      /* wait up to ~5s */
       if (tries > 30) {
         clearInterval(timer);
-        reject(new Error("Paystack script failed to load"));
+        reject(new Error("Paystack not available"));
       }
     }, 150);
   });
 }
 
 /* =====================================================
-   CORE PAYMENT (INLINE MODE ONLY)
+   CORE PAYMENT (INLINE ONLY)
 ===================================================== */
+
+let isProcessing = false;
 
 export async function payWithPaystack(params: {
   email: string;
-  amount: number;
+  amount: number; // naira
   reference: string;
   metadata?: Metadata;
   onSuccess: (ref: string) => void;
   onClose?: () => void;
 }) {
+  if (isProcessing) {
+    console.warn("⚠️ Payment already processing...");
+    return;
+  }
+
   const key = process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY;
 
   if (!key) {
@@ -80,9 +127,11 @@ export async function payWithPaystack(params: {
   }
 
   try {
+    isProcessing = true;
+
     const Paystack = await waitForPaystack();
 
-    console.log("🚀 Opening Paystack popup...", {
+    console.log("🚀 Paystack init", {
       email: params.email,
       amount: params.amount,
       reference: params.reference,
@@ -91,33 +140,34 @@ export async function payWithPaystack(params: {
     const handler = Paystack.setup({
       key,
       email: params.email,
-      amount: params.amount * 100,
+      amount: Math.round(params.amount * 100), // kobo
       currency: "NGN",
       ref: params.reference,
       metadata: params.metadata,
 
-      /* 🔥 GUARANTEED INLINE CALLBACK */
       callback: (res: PaystackResponse) => {
-        console.log("✅ Paystack callback fired:", res.reference);
+        console.log("✅ Payment success:", res.reference);
+        isProcessing = false;
         params.onSuccess(res.reference);
       },
 
       onClose: () => {
-        console.log("⚠️ Paystack closed");
+        console.log("⚠️ Payment cancelled");
+        isProcessing = false;
         params.onClose?.();
       },
     });
 
-    /* ALWAYS open iframe (no redirect) */
     handler.openIframe();
   } catch (err) {
-    console.error("❌ Paystack error:", err);
-    alert("Payment system failed to initialize");
+    isProcessing = false;
+    console.error("❌ Paystack init failed:", err);
+    alert("Payment failed to initialize. Please retry.");
   }
 }
 
 /* =====================================================
-   VENDOR PLAN HELPER (UNCHANGED LOGIC)
+   HELPERS
 ===================================================== */
 
 export function payForVendorPlan(options: {
@@ -136,6 +186,46 @@ export function payForVendorPlan(options: {
       type: "vendor_plan",
       plan: options.plan,
       vendorId: options.vendorId,
+    },
+    onSuccess: options.onSuccess,
+  });
+}
+
+/* =====================================================
+   FUTURE READY HELPERS (optional but useful)
+===================================================== */
+
+export function payForLeadUnlock(options: {
+  email: string;
+  leadId: string;
+  amount: number;
+  onSuccess: (ref: string) => void;
+}) {
+  payWithPaystack({
+    email: options.email,
+    amount: options.amount,
+    reference: `lead-${options.leadId}-${Date.now()}`,
+    metadata: {
+      type: "lead_unlock",
+      leadId: options.leadId,
+    },
+    onSuccess: options.onSuccess,
+  });
+}
+
+export function payToFeatureProduct(options: {
+  email: string;
+  productId: string;
+  amount: number;
+  onSuccess: (ref: string) => void;
+}) {
+  payWithPaystack({
+    email: options.email,
+    amount: options.amount,
+    reference: `feature-${options.productId}-${Date.now()}`,
+    metadata: {
+      type: "feature_product",
+      productId: options.productId,
     },
     onSuccess: options.onSuccess,
   });
