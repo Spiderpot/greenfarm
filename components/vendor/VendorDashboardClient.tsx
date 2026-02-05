@@ -12,7 +12,6 @@ import Button from "@/components/ui/Button";
 
 import { PRICING } from "@/lib/config/pricing";
 import { payForVendorPlan } from "@/lib/paystack";
-import { getSupabaseClient } from "@/lib/supabase-client";
 
 /* =====================================================
    TYPES
@@ -60,7 +59,6 @@ export default function VendorDashboardClient({
   const vendorId = vendor?.id ?? "";
   const paymentEmail = vendor?.email || "vendor@greenfarm.ng";
   const plan = vendor?.plan ?? "free";
-  const supabase = getSupabaseClient();
 
   /* =====================================================
      FILTER
@@ -81,7 +79,6 @@ export default function VendorDashboardClient({
   /* =====================================================
      PAYMENT + INSERT (UNCHANGED WORKING LOGIC)
   ===================================================== */
-
   function upgradePlan(p: "pro" | "elite") {
     if (!vendorId) {
       alert("Vendor not ready. Please login again.");
@@ -94,28 +91,6 @@ export default function VendorDashboardClient({
       plan: p,
       email: paymentEmail,
       vendorId,
-
-      async onSuccess(reference) {
-        console.log("DEBUG PAYMENT DATA:", {
-          vendorId,
-          plan: p,
-          reference,
-        });
-
-        const expires = new Date();
-        expires.setDate(expires.getDate() + 30);
-
-        await supabase.from("vendor_subscriptions").insert({
-          vendor_id: vendorId,
-          reference,
-          plan: p,
-          status: "active",
-          expires_at: expires.toISOString(),
-        });
-
-        alert("Subscription activated 🎉");
-        window.location.reload();
-      },
     });
   }
 

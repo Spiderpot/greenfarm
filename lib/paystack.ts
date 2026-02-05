@@ -4,103 +4,18 @@ import { PRICING } from "@/lib/config/pricing";
    TYPES
 ===================================================== */
 
-type Metadata = Record<string, unknown>;
-
-type PaystackResponse = {
-  reference: string;
+type Metadata = {
+  type?: string;
+  vendorId?: string;
+  leadId?: string;
+  plan?: string;
+  productId?: string;
 };
 
-type PaystackHandler = {
-  openIframe: () => void;
-};
-
-type PaystackPop = {
-  setup: (config: {
-    key: string;
-    email: string;
-    amount: number;
-    currency: string;
-    ref: string;
-    metadata?: Metadata;
-    callback: (response: PaystackResponse) => void;
-    onClose: () => void;
-  }) => PaystackHandler;
-};
-
-declare global {
-  interface Window {
-    PaystackPop?: PaystackPop;
-  }
-}
-
 /* =====================================================
-   CONSTANTS
-===================================================== */
-
-const PAYSTACK_SRC = "https://js.paystack.co/v1/inline.js";
-
-/* =====================================================
-   LOAD SCRIPT (auto inject if missing)
-===================================================== */
-
-function loadPaystackScript(): Promise<void> {
-  return new Promise((resolve, reject) => {
-    // already loaded
-    if (window.PaystackPop) return resolve();
-
-    const existing = document.querySelector(
-      `script[src="${PAYSTACK_SRC}"]`
-    );
-
-    if (existing) {
-      existing.addEventListener("load", () => resolve());
-      existing.addEventListener("error", () =>
-        reject(new Error("Paystack script failed to load"))
-      );
-      return;
-    }
-
-    const script = document.createElement("script");
-    script.src = PAYSTACK_SRC;
-    script.async = true;
-
-    script.onload = () => resolve();
-    script.onerror = () =>
-      reject(new Error("Paystack script failed to load"));
-
-    document.body.appendChild(script);
-  });
-}
-
-/* =====================================================
-   WAIT FOR PAYSTACK
-===================================================== */
-
-async function waitForPaystack(): Promise<PaystackPop> {
-  await loadPaystackScript();
-
-  return new Promise((resolve, reject) => {
-    let tries = 0;
-
-    const timer = setInterval(() => {
-      tries++;
-
-      if (window.PaystackPop) {
-        clearInterval(timer);
-        resolve(window.PaystackPop);
-        return;
-      }
-
-      if (tries > 30) {
-        clearInterval(timer);
-        reject(new Error("Paystack not available"));
-      }
-    }, 150);
-  });
-}
-
-/* =====================================================
-   CORE PAYMENT (INLINE ONLY)
+   CORE PAYMENT (REDIRECT MODE ONLY)
+   Stable for Next.js + React + Render
+   No iframe, no popup, no Paystack script needed
 ===================================================== */
 
 let isProcessing = false;
@@ -110,59 +25,46 @@ export async function payWithPaystack(params: {
   amount: number; // naira
   reference: string;
   metadata?: Metadata;
-  onSuccess: (ref: string) => void;
-  onClose?: () => void;
 }) {
-  if (isProcessing) {
-    console.warn("⚠️ Payment already processing...");
-    return;
-  }
-
-  const key = process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY;
-
-  if (!key) {
-    console.error("❌ Missing NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY");
-    alert("Payment not configured");
-    return;
-  }
+  if (isProcessing) return;
 
   try {
     isProcessing = true;
 
-    const Paystack = await waitForPaystack();
+    console.log("🚀 Initializing Paystack redirect", params);
 
-    console.log("🚀 Paystack init", {
-      email: params.email,
-      amount: params.amount,
-      reference: params.reference,
+    const res = await fetch("/api/paystack/unlock-lead", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        email: params.email,
+        amount: params.amount,
+        vendorId: params.metadata?.vendorId,
+        leadId: params.metadata?.leadId,
+        plan: params.metadata?.plan,
+        type: params.metadata?.type,
+        productId: params.metadata?.productId,
+      }),
     });
 
-    const handler = Paystack.setup({
-      key,
-      email: params.email,
-      amount: Math.round(params.amount * 100), // kobo
-      currency: "NGN",
-      ref: params.reference,
-      metadata: params.metadata,
+    const data = await res.json();
 
-      callback: (res: PaystackResponse) => {
-        console.log("✅ Payment success:", res.reference);
-        isProcessing = false;
-        params.onSuccess(res.reference);
-      },
+    if (!data?.url) {
+      throw new Error("Missing authorization url");
+    }
 
-      onClose: () => {
-        console.log("⚠️ Payment cancelled");
-        isProcessing = false;
-        params.onClose?.();
-      },
-    });
+    /* =========================================
+       Redirect to Paystack hosted checkout
+    ========================================= */
 
-    handler.openIframe();
+    window.location.href = data.url;
+
   } catch (err) {
-    isProcessing = false;
-    console.error("❌ Paystack init failed:", err);
+    console.error("❌ Payment failed:", err);
     alert("Payment failed to initialize. Please retry.");
+    isProcessing = false;
   }
 }
 
@@ -174,7 +76,6 @@ export function payForVendorPlan(options: {
   plan: "pro" | "elite";
   email: string;
   vendorId: string;
-  onSuccess: (ref: string) => void;
 }) {
   const price = PRICING.vendorPlans[options.plan].price;
 
@@ -187,19 +88,13 @@ export function payForVendorPlan(options: {
       plan: options.plan,
       vendorId: options.vendorId,
     },
-    onSuccess: options.onSuccess,
   });
 }
-
-/* =====================================================
-   FUTURE READY HELPERS (optional but useful)
-===================================================== */
 
 export function payForLeadUnlock(options: {
   email: string;
   leadId: string;
   amount: number;
-  onSuccess: (ref: string) => void;
 }) {
   payWithPaystack({
     email: options.email,
@@ -209,7 +104,6 @@ export function payForLeadUnlock(options: {
       type: "lead_unlock",
       leadId: options.leadId,
     },
-    onSuccess: options.onSuccess,
   });
 }
 
@@ -217,7 +111,6 @@ export function payToFeatureProduct(options: {
   email: string;
   productId: string;
   amount: number;
-  onSuccess: (ref: string) => void;
 }) {
   payWithPaystack({
     email: options.email,
@@ -227,6 +120,5 @@ export function payToFeatureProduct(options: {
       type: "feature_product",
       productId: options.productId,
     },
-    onSuccess: options.onSuccess,
   });
 }
