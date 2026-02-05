@@ -14,7 +14,6 @@ import { PRICING } from "@/lib/config/pricing";
 import { payForVendorPlan } from "@/lib/paystack";
 import { getSupabaseClient } from "@/lib/supabase-client";
 
-
 /* =====================================================
    TYPES
 ===================================================== */
@@ -34,9 +33,17 @@ type Vendor = {
   plan?: "free" | "pro" | "elite" | null;
 } | null;
 
+/* =====================================================
+   ONLY CHANGE → added 3 optional props
+===================================================== */
+
 type Props = {
   vendor: Vendor;
   leads: Lead[];
+
+  userEmail?: string;
+  isPro?: boolean;
+  isElite?: boolean;
 };
 
 /* =====================================================
@@ -113,7 +120,7 @@ export default function VendorDashboardClient({
   }
 
   /* =====================================================
-     UI
+     UI (UNCHANGED)
   ===================================================== */
 
   return (
@@ -134,7 +141,6 @@ export default function VendorDashboardClient({
         {plan === "free" && (
           <div className="grid gap-4 md:grid-cols-2">
 
-            {/* ================= PRO ================= */}
             <div className="border rounded-lg p-4 space-y-3">
               <h3 className="font-semibold text-base">Pro</h3>
 
@@ -152,7 +158,6 @@ export default function VendorDashboardClient({
               </Button>
             </div>
 
-            {/* ================= ELITE ================= */}
             <div className="border rounded-lg p-4 space-y-3">
               <h3 className="font-semibold text-base">Elite</h3>
 

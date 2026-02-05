@@ -7,16 +7,9 @@ import VendorDashboardClient from "@/components/vendor/VendorDashboardClient";
 
 import { getVendorDashboardData } from "@/lib/queries/getVendorData";
 
-/* =====================================================
-   SERVER PAGE — VENDOR DASHBOARD
-   STABLE • SSR SAFE • CLEAN
-===================================================== */
+export const dynamic = "force-dynamic";
 
 export default async function VendorDashboard() {
-  /* =====================================================
-     CREATE SERVER SUPABASE CLIENT
-  ===================================================== */
-
   const cookieStore = await cookies();
 
   const supabase = createServerClient(
@@ -33,9 +26,7 @@ export default async function VendorDashboard() {
     }
   );
 
-  /* =====================================================
-     AUTH CHECK
-  ===================================================== */
+  /* ================= AUTH ================= */
 
   const {
     data: { session },
@@ -49,24 +40,42 @@ export default async function VendorDashboard() {
 
   if (!user) redirect("/login");
 
-  /* =====================================================
-     FETCH DASHBOARD DATA
-     IMPORTANT:
-     pass USER ID only
-  ===================================================== */
+  /* ================= DATA ================= */
 
-  const { vendor, leads } =
-    await getVendorDashboardData(user.id);
+  const { vendor, leads } = await getVendorDashboardData(user.id);
 
-  /* =====================================================
-     RENDER
-  ===================================================== */
+  if (!vendor) redirect("/login");
+
+  /* ================= SUB FLAGS (TYPE SAFE) =================
+     We avoid touching vendor.plan types directly
+  ========================================================== */
+
+  const v = vendor as unknown as {
+  plan?: "free" | "pro" | "elite";
+  plan_expires_at?: string | null;
+};
+
+const now = new Date();
+
+const isActive =
+  v.plan_expires_at && new Date(v.plan_expires_at) > now;
+
+const plan = isActive ? v.plan : "free";
+
+
+  const isPro = plan === "pro" || plan === "elite";
+  const isElite = plan === "elite";
+
+  /* ================= RENDER ================= */
 
   return (
     <DashboardLayout>
       <VendorDashboardClient
         vendor={vendor}
         leads={leads}
+        userEmail={user.email}
+        isPro={isPro}
+        isElite={isElite}
       />
     </DashboardLayout>
   );
