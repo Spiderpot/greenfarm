@@ -29,9 +29,10 @@ function getSupabase() {
 ===================================================== */
 
 const BASE_URL =
-  process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
+  process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
 
 const PAYSTACK_SECRET = process.env.PAYSTACK_SECRET_KEY;
+
 
 /* =====================================================
    HELPERS
@@ -105,7 +106,7 @@ export async function POST(req: Request) {
           reference,
 
           /* redirect back here for fallback verify */
-          callback_url: `${BASE_URL}/vendor/dashboard`,
+          callback_url: `${BASE_URL}/api/paystack/unlock-lead`,
 
           metadata: {
             type,
