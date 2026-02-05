@@ -1,7 +1,6 @@
 "use client";
 
-import { payWithPaystack } from "@/lib/paystack";
-import { activateVendorSubscription } from "@/app/actions/activateVendor";
+import { payForVendorPlan } from "@/lib/paystack";
 
 export default function PayToListButton({
   vendorId,
@@ -9,25 +8,10 @@ export default function PayToListButton({
   vendorId: string;
 }) {
   function handlePay() {
-    payWithPaystack({
+    payForVendorPlan({
+      plan: "pro", // listing unlocks PRO
       email: "vendor@greenfarm.app",
-      amount: 1000,
-      reference: String(Date.now()),
-      metadata: {
-        payment_type: "vendor_subscription",
-        vendor_id: vendorId,
-      },
-      onSuccess: async (reference) => {
-        
-        await activateVendorSubscription({
-          vendorId,
-          reference,
-          plan: "pro", // ✅ required
-        });
-
-
-        alert("✅ Subscription active for 30 days!");
-      },
+      vendorId,
     });
   }
 

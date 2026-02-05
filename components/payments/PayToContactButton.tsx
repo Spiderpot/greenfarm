@@ -1,34 +1,28 @@
 "use client";
 
-import { payWithPaystack } from "@/lib/paystack";
+import { payForLeadUnlock } from "@/lib/paystack";
 
 export default function PayToContactButton({
-  amount,
-  buyerEmail,
-  onSuccess,
+  leadId,
+  email,
 }: {
-  amount: number;
-  buyerEmail: string;
-  onSuccess: (reference: string) => void;
+  leadId: string;
+  email: string;
 }) {
   function handlePay() {
-    payWithPaystack({
-      email: buyerEmail || "buyer@greenfarm.app",
-      amount,
-      reference: String(Date.now()),
-      metadata: {
-        payment_type: "pay_to_contact",
-      },
-      onSuccess,
+    payForLeadUnlock({
+      email,
+      leadId,
+      amount: 500, // your lead unlock price
     });
   }
 
   return (
     <button
       onClick={handlePay}
-      className="h-11 w-full rounded-md bg-green-600 text-white"
+      className="h-9 rounded-md bg-green-600 px-3 text-sm font-medium text-white"
     >
-      Unlock Vendor Contact
+      🔓 Pay to Contact
     </button>
   );
 }
