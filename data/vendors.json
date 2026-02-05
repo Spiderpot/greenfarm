@@ -1,18 +1,18 @@
 [
   {
-    "id": "vendor-001",
+    "slug": "kaduna-grain",
     "business_name": "Kaduna Grain Suppliers",
+    "email": "vendor1@greenfarm.ng",
     "phone": "08030000001",
     "whatsapp": "08030000001",
-    "email": "vendor1@greenfarm.ng",
     "location": "Kaduna"
   },
   {
-    "id": "vendor-002",
+    "slug": "plateau-spice",
     "business_name": "Plateau Spice Farms",
+    "email": "vendor2@greenfarm.ng",
     "phone": "08030000002",
     "whatsapp": "08030000002",
-    "email": "vendor2@greenfarm.ng",
     "location": "Plateau"
   }
 ]

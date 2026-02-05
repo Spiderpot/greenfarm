@@ -89,3 +89,20 @@ export async function getVendorDashboardData(userId: string): Promise<{
     leads,
   };
 }
+
+/* =====================================================
+   LANDMARK: resolveVendorIdByEmail
+   JSON → Supabase UUID bridge
+===================================================== */
+
+export async function resolveVendorIdByEmail(email: string) {
+  const supabase = await supabaseServer();
+
+  const { data } = await supabase
+    .from("vendors")
+    .select("id")
+    .eq("email", email)
+    .single();
+
+  return data?.id ?? null;
+}

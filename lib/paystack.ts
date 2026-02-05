@@ -86,7 +86,7 @@ export function payForVendorPlan(options: {
     metadata: {
       type: "vendor_plan",
       plan: options.plan,
-      vendorId: options.vendorId,
+      vendorId: options.vendorId, // ⭐ must come from DB only
     },
   });
 }

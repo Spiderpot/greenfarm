@@ -22,7 +22,7 @@ export default async function ProductDetail({ params }: PageProps) {
 
   if (!id) return notFound();
 
-  /* ✅ MUST call supabaseServer() */
+  /* ✅ Supabase */
   const supabase = await supabaseServer();
 
   /* ================= Fetch product ================= */
@@ -38,13 +38,14 @@ export default async function ProductDetail({ params }: PageProps) {
     return notFound();
   }
 
-  /* ================= Fetch vendor ================= */
-  /* (clean separation instead of passing random props) */
+  /* ================= Fetch vendor (REAL DB ONLY) ================= */
+  /* 🔥 THIS IS THE IMPORTANT PART */
+  /* We use the REAL Supabase UUID, not vendors.json */
 
   const { data: vendor } = await supabase
     .from("vendors")
     .select("*")
-    .eq("id", product.vendor_id)
+    .eq("id", product.vendor_id) // ✅ already real UUID
     .maybeSingle();
 
   /* ================= Helpers ================= */
@@ -100,9 +101,10 @@ export default async function ProductDetail({ params }: PageProps) {
         <section className="pt-6 border-t">
           <h2 className="text-lg font-semibold mb-3">Contact Vendor</h2>
 
+          {/* ✅ PASS REAL SUPABASE UUID ONLY */}
           <VendorContactCTA
             vendor={{
-              id: vendor.id,
+              id: vendor.id, // ✅ REAL UUID (FIXED)
               business_name: vendor.business_name,
               phone: vendor.phone,
               whatsapp: vendor.whatsapp,
