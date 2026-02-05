@@ -1,0 +1,7 @@
+[
+  { "id": "grains", "name": "Grains" },
+  { "id": "vegetables", "name": "Vegetables" },
+  { "id": "tubers", "name": "Tubers" },
+  { "id": "spices", "name": "Spices" },
+  { "id": "cash-crops", "name": "Cash Crops" }
+]
