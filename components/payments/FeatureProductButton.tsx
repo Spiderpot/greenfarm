@@ -1,33 +1,17 @@
 "use client";
 
-import { payWithPaystack } from "@/lib/paystack";
-import { activateFeatured } from "@/app/actions/activateFeatured";
+import { payToFeatureProduct } from "@/lib/paystack";
 
 export default function FeatureProductButton({
   productId,
-  vendorId,
 }: {
   productId: string;
-  vendorId: string;
 }) {
   function handlePay() {
-    payWithPaystack({
+    payToFeatureProduct({
       email: "vendor@greenfarm.app",
+      productId,
       amount: 500,
-      reference: String(Date.now()),
-      metadata: {
-        payment_type: "featured_product",
-        product_id: productId,
-      },
-      onSuccess: async (reference) => {
-        await activateFeatured({
-          productId,
-          vendorId,
-          reference,
-        });
-
-        alert("🚀 Product boosted for 7 days!");
-      },
     });
   }
 
