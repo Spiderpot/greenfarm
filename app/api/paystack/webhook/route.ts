@@ -4,7 +4,6 @@ import { supabaseServer } from "@/lib/supabase-server";
 
 /* =====================================================
    REQUIRED FOR PAYSTACK WEBHOOKS (Next.js 14+)
-   prevents body parsing & caching
 ===================================================== */
 
 export const dynamic = "force-dynamic";
@@ -23,6 +22,7 @@ type PaystackWebhook = {
       vendorId?: string;
       leadId?: string;
       type?: string;
+      plan?: string; // ⭐ REQUIRED
     };
   };
 };
@@ -50,44 +50,34 @@ function verifySignature(rawBody: string, signature: string | null) {
 
 export async function POST(req: Request) {
   try {
-    /* MUST use raw body for Paystack */
     const rawBody = await req.text();
 
     const signature = (await headers()).get("x-paystack-signature");
 
     /* ===============================
-       SECURITY: signature check
+       SECURITY
     =============================== */
     if (!verifySignature(rawBody, signature)) {
-      console.warn("❌ Invalid Paystack signature");
       return new Response("Unauthorized", { status: 401 });
     }
 
     const body: PaystackWebhook = JSON.parse(rawBody);
 
-    /* ===============================
-       Only care about success events
-    =============================== */
+    /* only process successful charges */
     if (body.event !== "charge.success") {
       return Response.json({ ignored: true });
     }
 
     const { reference, amount, status, metadata } = body.data;
 
-    if (status !== "success") {
+    if (status !== "success" || !reference) {
       return Response.json({ ignored: true });
-    }
-
-    if (!reference) {
-      console.warn("❌ Missing reference");
-      return Response.json({});
     }
 
     const supabase = await supabaseServer();
 
     /* ===============================
        REPLAY PROTECTION
-       prevents duplicate processing
     =============================== */
     const { data: existing } = await supabase
       .from("payments")
@@ -96,12 +86,11 @@ export async function POST(req: Request) {
       .maybeSingle();
 
     if (existing) {
-      console.log("⚠️ Duplicate webhook ignored:", reference);
       return Response.json({ duplicate: true });
     }
 
     /* ===============================
-       LOG PAYMENT FIRST (always)
+       LOG PAYMENT FIRST
     =============================== */
     await supabase.from("payments").insert({
       reference,
@@ -111,16 +100,18 @@ export async function POST(req: Request) {
       raw: body,
     });
 
-    /* ===============================
-       HANDLE METADATA TYPES
-    =============================== */
-
     if (!metadata) {
       return Response.json({ ok: true });
     }
 
-    /* ---------- LEAD UNLOCK ---------- */
-    if (metadata.type === "lead_unlock" && metadata.vendorId && metadata.leadId) {
+    /* =====================================================
+       LEAD UNLOCK
+    ===================================================== */
+    if (
+      metadata.type === "lead_unlock" &&
+      metadata.vendorId &&
+      metadata.leadId
+    ) {
       await supabase.from("lead_unlocks").upsert(
         {
           vendor_id: metadata.vendorId,
@@ -129,33 +120,46 @@ export async function POST(req: Request) {
           paid: true,
           paystack_ref: reference,
         },
-        {
-          onConflict: "vendor_id,lead_id",
-        }
+        { onConflict: "vendor_id,lead_id" }
       );
     }
 
-    /* ---------- VENDOR PLAN ---------- */
-    if (metadata.type === "vendor_plan" && metadata.vendorId) {
+    /* =====================================================
+       VENDOR PLAN  ⭐⭐⭐ MAIN FIX
+    ===================================================== */
+    if (
+      metadata.type === "vendor_plan" &&
+      metadata.vendorId &&
+      metadata.plan
+    ) {
+      const expires = new Date();
+      expires.setDate(expires.getDate() + 30);
+
+      const expiresISO = expires.toISOString();
+
+      /* subscription history */
+      await supabase.from("vendor_subscriptions").insert({
+        vendor_id: metadata.vendorId,
+        reference,
+        plan: metadata.plan,
+        status: "active",
+        expires_at: expiresISO,
+      });
+
+      /* activate vendor */
       await supabase
         .from("vendors")
         .update({
-          plan: metadata.type,
-          verified: true,
+          plan: metadata.plan,
+          plan_expires_at: expiresISO,
+          is_verified: true,
         })
         .eq("id", metadata.vendorId);
     }
 
-    /* future types can be added easily */
-
-    console.log("✅ Payment processed:", reference);
-
     return Response.json({ received: true });
   } catch (err) {
-    console.error("❌ Webhook crash:", err);
-
-    return new Response("Webhook error", {
-      status: 500,
-    });
+    console.error("Webhook crash:", err);
+    return new Response("Webhook error", { status: 500 });
   }
 }
