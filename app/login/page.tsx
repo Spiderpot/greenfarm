@@ -64,7 +64,7 @@ export default function LoginPage() {
             required
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full rounded border border-gray-300 bg-white text-black p-3 pr-12 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-600"
+            className="w-full rounded border border-gray-300 bg-white text-black p-3 pr-12 placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-green-600"
           />
 
           <button

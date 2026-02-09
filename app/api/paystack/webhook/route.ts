@@ -153,7 +153,16 @@ export async function POST(req: Request) {
           plan: metadata.plan,
           plan_expires_at: expiresISO,
           is_verified: true,
+
+          /* 🔒 set limits automatically */
+          monthly_product_limit:
+            metadata.plan === "elite"
+              ? 9999
+              : metadata.plan === "pro"
+              ? 50
+              : 5,
         })
+
         .eq("id", metadata.vendorId);
     }
 

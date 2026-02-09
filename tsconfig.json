@@ -1,34 +1,47 @@
 {
   "compilerOptions": {
+    /* =====================================
+       Core
+    ===================================== */
     "target": "ES2022",
-    "lib": [
-      "dom",
-      "dom.iterable",
-      "esnext"
-    ],
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "jsx": "react-jsx",
+
+    /* =====================================
+       Next.js + TS behavior
+    ===================================== */
     "allowJs": true,
     "skipLibCheck": true,
     "strict": true,
     "noEmit": true,
-    "esModuleInterop": true,
+    "isolatedModules": true,
+    "incremental": true,
+
+    /* =====================================
+       Module system
+    ===================================== */
     "module": "esnext",
     "moduleResolution": "bundler",
+    "esModuleInterop": true,
     "resolveJsonModule": true,
-    "isolatedModules": true,
-    "jsx": "react-jsx",
-    "incremental": true,
+
+    /* =====================================
+       PATH ALIASES (🔥 THIS FIXES YOUR ERROR)
+    ===================================== */
     "baseUrl": ".",
     "paths": {
-      "@/*": [
-        "./*"
-      ]
+      "@/*": ["./*"]
     },
-    "plugins": [
-      {
-        "name": "next"
-      }
-    ]
+
+    /* =====================================
+       Next.js plugin
+    ===================================== */
+    "plugins": [{ "name": "next" }]
   },
+
+  /* =====================================
+     Files to include
+  ===================================== */
   "include": [
     "next-env.d.ts",
     "**/*.ts",
@@ -36,8 +49,9 @@
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts"
   ],
-  "exclude": [
-    "node_modules",
-    ".next"
-  ]
+
+  /* =====================================
+     Exclusions
+  ===================================== */
+  "exclude": ["node_modules", ".next"]
 }

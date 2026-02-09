@@ -7,18 +7,40 @@ export async function activateFeatured(data: {
   vendorId: string;
   reference: string;
 }) {
+  const supabase = await supabaseServer();
+
   const expires = new Date();
   expires.setDate(expires.getDate() + 7); // 7 days boost
 
-  const supabase = await supabaseServer();
+  /* =====================================================
+     🔒 PLAN FEATURE LOCK (SERVER ENFORCED)
+     NEVER trust frontend
+  ===================================================== */
+
+  const { data: vendor } = await supabase
+    .from("vendors")
+    .select("plan")
+    .eq("id", data.vendorId) // ✅ FIXED
+    .single();
+
+  if (!vendor) {
+    throw new Error("Vendor not found");
+  }
+
+  if (vendor.plan === "free") {
+    throw new Error("Upgrade to PRO to feature products.");
+  }
+
+  /* =====================================================
+     FEATURE INSERT
+  ===================================================== */
 
   await supabase.from("featured_products").insert({
     product_id: data.productId,
     vendor_id: data.vendorId,
     reference: data.reference,
-    expires_at: expires,
+    expires_at: expires.toISOString(),
   });
-
 
   return { success: true };
 }
