@@ -40,7 +40,11 @@ type Vendor = {
 type Props = {
   vendor: Vendor;
   leads: Lead[];
+  userEmail?: string;
+  isPro?: boolean;
+  isElite?: boolean;
 };
+
 
 /* =====================================================
    COMPONENT

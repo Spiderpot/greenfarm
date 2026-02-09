@@ -1,3 +1,4 @@
+// C:\Users\JULIUS  CZAR KOME\Documents\greenfarm\lib\products.ts
 // =====================================================
 // Central product DB helpers (GreenFarm)
 // SAFE FOR BOTH SERVER + CLIENT
@@ -5,12 +6,7 @@
 // =====================================================
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type {
-  Product,
-  NewProduct,
-  UpdateProduct
-} from "@/types/product";
-
+import type { Product, NewProduct, UpdateProduct } from "@/types/product";
 
 /* =====================================================
    INTERNAL
@@ -20,14 +16,11 @@ function handleError(error: unknown) {
   if (error) throw error;
 }
 
-
 /* =====================================================
    PUBLIC PRODUCTS (marketplace)
 ===================================================== */
 
-export async function getProducts(
-  supabase: SupabaseClient
-): Promise<Product[]> {
+export async function getProducts(supabase: SupabaseClient): Promise<Product[]> {
   const { data, error } = await supabase
     .from("products")
     .select("*")
@@ -37,7 +30,6 @@ export async function getProducts(
   handleError(error);
   return data ?? [];
 }
-
 
 /* =====================================================
    SINGLE PRODUCT
@@ -57,7 +49,6 @@ export async function getProductById(
   return data ?? null;
 }
 
-
 /* =====================================================
    VENDOR PRODUCTS (inventory manager)
 ===================================================== */
@@ -76,7 +67,6 @@ export async function getVendorProducts(
   return data ?? [];
 }
 
-
 /* =====================================================
    CREATE
 ===================================================== */
@@ -85,13 +75,10 @@ export async function createProduct(
   supabase: SupabaseClient,
   payload: NewProduct
 ): Promise<void> {
-  const { error } = await supabase
-    .from("products")
-    .insert(payload);
+  const { error } = await supabase.from("products").insert(payload);
 
   handleError(error);
 }
-
 
 /* =====================================================
    UPDATE
@@ -102,14 +89,10 @@ export async function updateProduct(
   id: string,
   updates: UpdateProduct
 ): Promise<void> {
-  const { error } = await supabase
-    .from("products")
-    .update(updates)
-    .eq("id", id);
+  const { error } = await supabase.from("products").update(updates).eq("id", id);
 
   handleError(error);
 }
-
 
 /* =====================================================
    DELETE
@@ -119,14 +102,10 @@ export async function deleteProduct(
   supabase: SupabaseClient,
   id: string
 ): Promise<void> {
-  const { error } = await supabase
-    .from("products")
-    .delete()
-    .eq("id", id);
+  const { error } = await supabase.from("products").delete().eq("id", id);
 
   handleError(error);
 }
-
 
 /* =====================================================
    FEATURE

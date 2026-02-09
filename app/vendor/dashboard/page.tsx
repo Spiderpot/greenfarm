@@ -1,3 +1,5 @@
+// C:\Users\JULIUS  CZAR KOME\Documents\greenfarm\app\vendor\dashboard\page.tsx
+
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { createServerClient } from "@supabase/ssr";
@@ -46,37 +48,11 @@ export default async function VendorDashboard() {
 
   if (!vendor) redirect("/login");
 
-  /* ================= SUB FLAGS (TYPE SAFE) =================
-     We avoid touching vendor.plan types directly
-  ========================================================== */
-
-  const v = vendor as unknown as {
-  plan?: "free" | "pro" | "elite";
-  plan_expires_at?: string | null;
-};
-
-const now = new Date();
-
-const isActive =
-  v.plan_expires_at && new Date(v.plan_expires_at) > now;
-
-const plan = isActive ? v.plan : "free";
-
-
-  const isPro = plan === "pro" || plan === "elite";
-  const isElite = plan === "elite";
-
   /* ================= RENDER ================= */
 
   return (
     <DashboardLayout>
-      <VendorDashboardClient
-        vendor={vendor}
-        leads={leads}
-        userEmail={user.email}
-        isPro={isPro}
-        isElite={isElite}
-      />
+      <VendorDashboardClient vendor={vendor} leads={leads} />
     </DashboardLayout>
   );
 }
