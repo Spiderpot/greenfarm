@@ -10,7 +10,7 @@ import { supabaseServer } from "@/lib/supabase-server";
 export async function activateVendorSubscription(data: {
   vendorId: string;
   reference: string;
-  plan: "pro" | "elite";
+  plan: "PRO_FARMER" | "ENTERPRISE";
 }) {
   const supabase = await supabaseServer();
 

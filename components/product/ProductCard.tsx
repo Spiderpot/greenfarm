@@ -25,7 +25,8 @@ interface Product {
   negotiable?: boolean;
   featured?: boolean;
 
-  /* 🔥 NEW (for verified badge) */
+  is_demo?: boolean; // ✅ NEW
+
   vendor?: Vendor | null;
 }
 
@@ -75,6 +76,13 @@ export default function ProductCard({
         </span>
       )}
 
+      {/* ================= Demo Badge ================= */}
+      {product.is_demo && (
+        <span className="absolute right-2 top-8 z-10 rounded bg-yellow-600 px-2 py-1 text-[10px] font-semibold text-white shadow">
+          Sample Listing
+        </span>
+      )}
+
       {/* ================= Category Tag ================= */}
       {product.category && (
         <span className="absolute right-2 top-2 z-10 rounded bg-black/70 px-2 py-1 text-[10px] text-white backdrop-blur">
@@ -117,9 +125,14 @@ export default function ProductCard({
           </p>
         )}
 
-        {/* ================= Pricing ================= */}
+         {/* ================= Pricing ================= */}
         <div className="mt-1 flex flex-wrap items-center gap-1 text-sm">
-          {hasDiscount ? (
+
+          {product.is_demo ? (
+            <span className="font-semibold text-green-600">
+              Request Quote
+            </span>
+          ) : hasDiscount ? (
             <>
               <span className="font-bold text-green-600">
                 {formatPrice(product.discount_price)}
@@ -133,21 +146,23 @@ export default function ProductCard({
                 Sale
               </span>
             </>
+          ) : product.price ? (
+            <span className="font-semibold text-green-600">
+              {formatPrice(product.price)}
+            </span>
           ) : (
-            product.price && (
-              <span className="font-semibold text-green-600">
-                {formatPrice(product.price)}
-              </span>
-            )
+            <span className="font-semibold text-green-600">
+              Request Quote
+            </span>
           )}
 
-          {product.unit && (
+          {!product.is_demo && product.unit && (
             <span className="text-xs text-zinc-500">
               / {product.unit}
             </span>
           )}
 
-          {product.negotiable && (
+          {!product.is_demo && product.negotiable && (
             <span className="rounded bg-blue-100 px-2 py-0.5 text-[10px] font-medium text-blue-700">
               Negotiable
             </span>

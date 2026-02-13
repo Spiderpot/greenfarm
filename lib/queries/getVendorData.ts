@@ -1,4 +1,5 @@
 import { supabaseServer } from "@/lib/supabase-server";
+import { PRICING } from "@/lib/config/pricing";
 
 /* =====================================================
    TYPES
@@ -8,6 +9,7 @@ export type Vendor = {
   id: string;
   email?: string | null;
   is_verified?: boolean | null;
+  plan?: string | null;
 };
 
 export type Lead = {
@@ -20,30 +22,46 @@ export type Lead = {
   unlocked?: boolean;
 };
 
-/* =====================================================
-   FUNCTION
-   ✅ only patched unlock logic
-   ❌ no refactor
-===================================================== */
-
-export async function getVendorDashboardData(userId: string): Promise<{
-  vendor: Vendor;
-  leads: Lead[];
-}> {
+export async function getVendorDashboardData(userId: string) {
   const supabase = await supabaseServer();
 
+  const now = new Date().toISOString();
+
   /* =====================================================
-     vendor === user (unchanged)
+     GET VENDOR
   ===================================================== */
+
+  const { data: vendorRow } = await supabase
+    .from("vendors")
+    .select("*")
+    .eq("id", userId)
+    .single();
 
   const vendor: Vendor = {
     id: userId,
-    email: null,
-    is_verified: true,
+    email: vendorRow?.email ?? null,
+    is_verified: vendorRow?.is_verified ?? false,
+    plan: vendorRow?.plan ?? "FREE",
   };
 
   /* =====================================================
-     GET LEADS (unchanged)
+     GET PRODUCTS (ACTIVE + NOT EXPIRED)
+  ===================================================== */
+
+  const { data: products } = await supabase
+    .from("products")
+    .select("id")
+    .eq("vendor_id", userId)
+    .eq("status", "active")
+    .or(`expires_at.is.null,expires_at.gt.${now}`);
+
+  const listingCount = products?.length ?? 0;
+  const listingLimit = PRICING.getListingLimit(
+  vendor.plan ?? undefined
+);
+
+  /* =====================================================
+     GET LEADS
   ===================================================== */
 
   const { data: leadsRows } = await supabase
@@ -53,8 +71,7 @@ export async function getVendorDashboardData(userId: string): Promise<{
     .order("created_at", { ascending: false });
 
   /* =====================================================
-     ✅ PATCH: GET UNLOCKED LEADS
-     (THIS IS THE ONLY ADDITION)
+     GET UNLOCKED LEADS
   ===================================================== */
 
   const { data: unlocks } = await supabase
@@ -63,13 +80,7 @@ export async function getVendorDashboardData(userId: string): Promise<{
     .eq("vendor_id", userId)
     .eq("paid", true);
 
-  const unlockedSet = new Set(
-    unlocks?.map((u) => u.lead_id)
-  );
-
-  /* =====================================================
-     MERGE (same logic + unlocked flag)
-  ===================================================== */
+  const unlockedSet = new Set(unlocks?.map((u) => u.lead_id));
 
   const leads: Lead[] =
     leadsRows?.map((l) => ({
@@ -79,30 +90,23 @@ export async function getVendorDashboardData(userId: string): Promise<{
       product_name: l.product_name ?? "",
       created_at: l.created_at ?? new Date().toISOString(),
       contacted: Boolean(l.contacted),
-
-      /* ✅ PATCHED LINE */
       unlocked: unlockedSet.has(l.id),
     })) ?? [];
+
+  /* =====================================================
+     SIMPLE EARNINGS CALC (for now)
+     count unlocked leads × ₦50 convenience
+  ===================================================== */
+
+  const earnings =
+    leads.filter((l) => l.unlocked).length *
+    PRICING.oneTime.convenienceConnect;
 
   return {
     vendor,
     leads,
+    listingCount,
+    listingLimit,
+    earnings,
   };
-}
-
-/* =====================================================
-   LANDMARK: resolveVendorIdByEmail
-   JSON → Supabase UUID bridge
-===================================================== */
-
-export async function resolveVendorIdByEmail(email: string) {
-  const supabase = await supabaseServer();
-
-  const { data } = await supabase
-    .from("vendors")
-    .select("id")
-    .eq("email", email)
-    .single();
-
-  return data?.id ?? null;
 }

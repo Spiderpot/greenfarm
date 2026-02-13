@@ -9,62 +9,66 @@ export const PRICING = {
      Vendor Subscription Plans (monthly)
   ===================================================== */
   vendorPlans: {
-    free: {
+    FREE: {
       key: "FREE",
       name: "Free",
       price: 0,
 
-      /* 🔥 business rules */
       limits: {
-        listings: 5, // ← UPDATED (was 10)
+        listings: 1,
         featured: false,
         analytics: false,
+        expiresDays: 7,
       },
 
       features: [
-        "Up to 5 products",
+        "1 product only",
+        "Expires after 7 days",
         "Basic visibility",
       ],
     },
 
-    pro: {
-      key: "PRO",
-      name: "Pro",
+    PRO_FARMER: {
+      key: "PRO_FARMER",
+      name: "Pro Farmer",
       price: 5000,
 
       limits: {
-        listings: 50,
+        listings: 20,
         featured: true,
         analytics: true,
+        expiresDays: null,
       },
 
       features: [
-        "Up to 50 products",
+        "Up to 20 products",
+        "No expiry",
         "Feature products",
         "Higher ranking",
         "Verified badge",
-        "More impressions",
       ],
     },
 
-    elite: {
-      key: "ELITE",
-      name: "Elite",
+    ENTERPRISE: {
+      key: "ENTERPRISE",
+      name: "Enterprise / Aggregator",
       price: 15000,
 
       limits: {
-        listings: Infinity,
+        listings: Number.POSITIVE_INFINITY, // safer than Infinity
         featured: true,
         analytics: true,
+        expiresDays: null,
+        commissionPct: 3,
       },
 
       features: [
         "Unlimited products",
+        "No expiry",
         "Homepage featured",
         "Top search placement",
-        "Advanced analytics",
         "Priority leads",
-        "Instant WhatsApp connect",
+        "3% transaction commission (escrow soon)",
       ],
     },
   },
@@ -73,9 +77,9 @@ export const PRICING = {
      One-time Payments
   ===================================================== */
   oneTime: {
-    featureProduct: 1000,     // boost one product
-    boostListing: 500,        // temporary boost
-    convenienceConnect: 50,   // optional buyer fast-connect
+    featureProduct: 1000,
+    boostListing: 500,
+    convenienceConnect: 50,
   },
 
   /* =====================================================
@@ -86,13 +90,18 @@ export const PRICING = {
     return `₦${price.toLocaleString()}`;
   },
 
-  /* 🔥 get plan safely */
   getPlan(plan?: string) {
-    const key = (plan || "FREE").toLowerCase() as keyof typeof this.vendorPlans;
-    return this.vendorPlans[key] ?? this.vendorPlans.free;
+    const normalized = String(plan || "FREE").toUpperCase().trim();
+
+    if (normalized in this.vendorPlans) {
+      return this.vendorPlans[
+        normalized as keyof typeof this.vendorPlans
+      ];
+    }
+
+    return this.vendorPlans.FREE;
   },
 
-  /* 🔥 listing limit helper */
   getListingLimit(plan?: string) {
     return this.getPlan(plan).limits.listings;
   },

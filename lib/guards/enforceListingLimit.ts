@@ -30,7 +30,7 @@ async function getSupabase() {
 
 /* =====================================================
    🔥 ENFORCE LISTING LIMIT (MONEY GATE)
-   Blocks FREE users after limit
+   Counts ACTIVE listings only
 ===================================================== */
 
 export async function enforceListingLimit(vendorId: string) {
@@ -52,11 +52,14 @@ export async function enforceListingLimit(vendorId: string) {
   /* Unlimited plan */
   if (plan.limits.listings === Infinity) return;
 
-  /* Count products */
+  const nowIso = new Date().toISOString();
+
+  /* Count ACTIVE products only */
   const { count, error: countError } = await supabase
     .from("products")
     .select("*", { count: "exact", head: true })
-    .eq("vendor_id", vendorId);
+    .eq("vendor_id", vendorId)
+    .or(`expires_at.is.null,expires_at.gt.${nowIso}`);
 
   if (countError) {
     throw new Error("Unable to verify listing limit");
@@ -64,14 +67,13 @@ export async function enforceListingLimit(vendorId: string) {
 
   if ((count ?? 0) >= plan.limits.listings) {
     throw new Error(
-      `Listing limit reached. ${plan.name} allows only ${plan.limits.listings} products. Upgrade to continue.`
+      `Listing limit reached. ${plan.name} allows only ${plan.limits.listings} active products. Upgrade to continue.`
     );
   }
 }
 
 /* =====================================================
-   🔒 FEATURE GATE (PRO/ELITE ONLY FEATURES)
-   Used for: featured, analytics, boosts, etc
+   🔒 FEATURE GATE (PRO/ENTERPRISE ONLY FEATURES)
 ===================================================== */
 
 export function enforceFeatureAccess(

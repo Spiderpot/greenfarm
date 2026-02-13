@@ -1,6 +1,5 @@
 import { PRICING } from "@/lib/config/pricing";
 
-
 /* =====================================================
    Vendor Plan Types
 ===================================================== */
@@ -8,15 +7,28 @@ import { PRICING } from "@/lib/config/pricing";
 export type VendorPlanKey = keyof typeof PRICING.vendorPlans;
 
 /* =====================================================
+   Normalize legacy values
+===================================================== */
+
+function normalizePlanKey(plan?: string): VendorPlanKey {
+  const p = String(plan || "").toLowerCase().trim();
+
+  if (p === "free") return "FREE";
+  if (p === "pro" || p === "pro_farmer" || p === "professional")
+    return "PRO_FARMER";
+  if (p === "elite" || p === "enterprise" || p === "aggregator")
+    return "ENTERPRISE";
+
+  return "FREE";
+}
+
+/* =====================================================
    Resolve vendor plan safely
-   - Defaults to FREE
-   - Guards against invalid values
 ===================================================== */
 
 export function resolveVendorPlan(plan?: string) {
-  const key = (plan || "free").toLowerCase() as VendorPlanKey;
-
-  return PRICING.vendorPlans[key] ?? PRICING.vendorPlans.free;
+  const key = normalizePlanKey(plan);
+  return PRICING.vendorPlans[key];
 }
 
 /* =====================================================

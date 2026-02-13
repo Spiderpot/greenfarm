@@ -3,25 +3,26 @@
 import { useState } from "react";
 import { PRICING } from "@/lib/config/pricing";
 
+type PlanKey = "PRO_FARMER" | "ENTERPRISE";
+
 type Props = {
-  currentPlan?: string; // "free" | "pro" | "elite"
+  currentPlan?: string; // FREE | PRO_FARMER | ENTERPRISE
   currentCount?: number;
 };
 
 export default function LimitReachedCard({
-  currentPlan = "free",
+  currentPlan = "FREE",
   currentCount,
 }: Props) {
-  const [loadingPlan, setLoadingPlan] = useState<null | "pro" | "elite">(null);
+  const [loadingPlan, setLoadingPlan] = useState<PlanKey | null>(null);
 
-  const pro = PRICING.vendorPlans.pro;
-  const elite = PRICING.vendorPlans.elite;
+  const pro = PRICING.vendorPlans.PRO_FARMER;
+  const enterprise = PRICING.vendorPlans.ENTERPRISE;
 
   /* =====================================================
      START CHECKOUT
-     (Paystack wiring will plug into this endpoint next)
   ===================================================== */
-  async function startUpgrade(plan: "pro" | "elite") {
+  async function startUpgrade(plan: PlanKey) {
     try {
       setLoadingPlan(plan);
 
@@ -38,7 +39,6 @@ export default function LimitReachedCard({
         return;
       }
 
-      // redirect to Paystack checkout (or success page)
       if (data.checkoutUrl) {
         window.location.href = data.checkoutUrl;
       }
@@ -73,7 +73,7 @@ export default function LimitReachedCard({
       {/* PLANS */}
       <div className="mt-6 grid gap-4 md:grid-cols-2">
 
-        {/* ================= PRO ================= */}
+        {/* ================= PRO FARMER ================= */}
         <div className="rounded-lg border p-4 hover:shadow transition">
 
           <div className="flex items-center justify-between">
@@ -91,36 +91,39 @@ export default function LimitReachedCard({
 
           <button
             disabled={loadingPlan !== null}
-            onClick={() => startUpgrade("pro")}
+            onClick={() => startUpgrade("PRO_FARMER")}
             className="mt-4 w-full rounded-lg bg-green-600 py-2 text-white font-medium hover:bg-green-700 disabled:opacity-60"
           >
-            {loadingPlan === "pro" ? "Processing..." : "Upgrade to Pro"}
+            {loadingPlan === "PRO_FARMER"
+              ? "Processing..."
+              : "Upgrade to Pro Farmer"}
           </button>
         </div>
 
-
-        {/* ================= ELITE ================= */}
+        {/* ================= ENTERPRISE ================= */}
         <div className="rounded-lg border p-4 hover:shadow transition">
 
           <div className="flex items-center justify-between">
-            <p className="font-semibold text-gray-900">{elite.name}</p>
+            <p className="font-semibold text-gray-900">{enterprise.name}</p>
             <p className="text-green-700 font-semibold">
-              {PRICING.format(elite.price)}/mo
+              {PRICING.format(enterprise.price)}/mo
             </p>
           </div>
 
           <ul className="mt-3 text-sm text-gray-600 list-disc pl-5 space-y-1">
-            {elite.features.map((f) => (
+            {enterprise.features.map((f) => (
               <li key={f}>{f}</li>
             ))}
           </ul>
 
           <button
             disabled={loadingPlan !== null}
-            onClick={() => startUpgrade("elite")}
+            onClick={() => startUpgrade("ENTERPRISE")}
             className="mt-4 w-full rounded-lg bg-black py-2 text-white font-medium hover:bg-gray-900 disabled:opacity-60"
           >
-            {loadingPlan === "elite" ? "Processing..." : "Upgrade to Elite"}
+            {loadingPlan === "ENTERPRISE"
+              ? "Processing..."
+              : "Upgrade to Enterprise"}
           </button>
         </div>
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useState, useTransition, useEffect } from "react";
 
 /* =====================================================
    TYPES
@@ -23,7 +23,6 @@ type Props = {
 
 /* =====================================================
    COMPONENT
-   ⚠️ IMPORTANT: DEFAULT EXPORT
 ===================================================== */
 
 export default function LeadsTable({ leads }: Props) {
@@ -32,6 +31,18 @@ export default function LeadsTable({ leads }: Props) {
     useState<Set<string>>(new Set());
 
   const [, startTransition] = useTransition();
+
+  /* =====================================================
+     🔥 AUTO REFRESH (REAL-TIME SAFE FOR LAUNCH)
+  ===================================================== */
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      window.location.reload();
+    }, 15000); // refresh every 15 seconds
+
+    return () => clearInterval(interval);
+  }, []);
 
   /* =====================================================
      FILTER
@@ -95,7 +106,6 @@ export default function LeadsTable({ leads }: Props) {
                   {lead.buyer_name}
                 </td>
 
-                {/* ✅ ALWAYS SHOW PHONE */}
                 <td className="p-3 font-semibold">
                   {lead.buyer_phone}
                 </td>
@@ -113,6 +123,7 @@ export default function LeadsTable({ leads }: Props) {
                   <a
                     href={`https://wa.me/${lead.buyer_phone.replace(/\D/g, "")}`}
                     target="_blank"
+                    rel="noreferrer"
                     className="bg-green-100 text-green-700 px-3 py-1 rounded-lg"
                   >
                     WhatsApp
@@ -129,6 +140,15 @@ export default function LeadsTable({ leads }: Props) {
                 </td>
               </tr>
             ))}
+
+            {filtered.length === 0 && (
+              <tr>
+                <td colSpan={5} className="p-4 text-center text-gray-500">
+                  No leads yet.
+                </td>
+              </tr>
+            )}
+
           </tbody>
 
         </table>

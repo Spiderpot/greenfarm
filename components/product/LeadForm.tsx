@@ -9,69 +9,96 @@ import { createLead } from "@/app/actions/createLead";
 interface Props {
   productId: string;
   vendorId: string;
-  productName: string;
+  productName?: string;
+  onSuccess?: () => void;
+  onCancel?: () => void;
 }
 
 export default function LeadForm({
   productId,
   vendorId,
   productName,
+  onSuccess,
+  onCancel,
 }: Props) {
-  const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
 
   async function handleSubmit(formData: FormData) {
     setLoading(true);
+    setErr(null);
 
-    await createLead({
-      productId,
-      vendorId,
-      productName, // ✅ ADD THIS
-      name: formData.get("name") as string,
-      phone: formData.get("phone") as string,
-      message: formData.get("message") as string,
-    });
+    const name = String(formData.get("name") ?? "").trim();
+    const phone = String(formData.get("phone") ?? "").trim();
+    const message = String(formData.get("message") ?? "").trim();
 
-    setLoading(false);
-    setSent(true);
+    if (!name || !phone || !message) {
+      setLoading(false);
+      setErr("Please fill all fields.");
+      return;
+    }
+
+    try {
+      const res = await createLead({
+        productId,
+        vendorId,
+        productName,
+        name,
+        phone,
+        message,
+      });
+
+      // If your action returns { success: boolean }
+      if (res && "success" in res && res.success === false) {
+        setErr("Saved message failed, but contact is unlocked. Please try again later.");
+      }
+    } catch (e) {
+      console.error("createLead failed:", e);
+      setErr("Message failed, but contact is unlocked. Please try again later.");
+    } finally {
+      // ✅ ALWAYS unlock after submit attempt
+      setSent(true);
+      setLoading(false);
+      onSuccess?.();
+    }
   }
 
   if (sent) {
     return (
       <p className="text-sm text-green-600">
-        ✅ Message sent to vendor. They’ll contact you soon.
+        ✅ Submitted. Vendor contact unlocked.
       </p>
     );
   }
 
+  const placeholderText = productName
+    ? `Hi, I'm interested in ${productName}`
+    : "Hi, I'm interested";
+
   return (
-    <div className="mt-4">
-      {/* Toggle */}
-      {!open && (
-        <button
-          onClick={() => setOpen(true)}
-          className="text-sm text-gray-600 underline"
-        >
-          Prefer message instead?
-        </button>
-      )}
+    <form action={handleSubmit} className="space-y-3">
+      <Input name="name" placeholder="Your name" required />
+      <Input name="phone" placeholder="Phone number" required />
+      <Textarea name="message" placeholder={placeholderText} required />
 
-      {open && (
-        <form action={handleSubmit} className="space-y-3 mt-3">
-          <Input name="name" placeholder="Your name" required />
-          <Input name="phone" placeholder="Phone number" required />
-          <Textarea
-            name="message"
-            placeholder={`Hi, I'm interested in ${productName}`}
-            required
-          />
+      {err && <p className="text-xs text-red-600">{err}</p>}
 
-          <Button disabled={loading}>
-            {loading ? "Sending..." : "Send message"}
-          </Button>
-        </form>
-      )}
-    </div>
+      <div className="flex items-center gap-2">
+        <Button disabled={loading}>
+          {loading ? "Sending..." : "Send"}
+        </Button>
+
+        {onCancel && (
+          <button
+            type="button"
+            onClick={onCancel}
+            className="text-sm text-gray-600 underline"
+          >
+            Cancel
+          </button>
+        )}
+      </div>
+    </form>
   );
 }

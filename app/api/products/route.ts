@@ -7,9 +7,28 @@
 import { NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
-import { PRICING } from "@/lib/config/pricing";
 
 type ApiErrorCode = "LIMIT_REACHED" | "FEATURE_LOCKED" | "VENDOR_SETUP_FAILED";
+
+type VendorPlan = "FREE" | "PRO_FARMER" | "ENTERPRISE";
+
+function normalizePlan(raw: unknown): VendorPlan {
+  const p = String(raw || "").toLowerCase().trim();
+
+  // Accept old/legacy plan keys too
+  if (p === "free") return "FREE";
+  if (p === "pro_farmer" || p === "pro" || p === "professional") return "PRO_FARMER";
+  if (p === "enterprise" || p === "aggregator" || p === "elite") return "ENTERPRISE";
+
+  // default
+  return "FREE";
+}
+
+function planLimits(plan: VendorPlan) {
+  if (plan === "FREE") return { listings: 1, expiresDays: 7, featuredAllowed: false };
+  if (plan === "PRO_FARMER") return { listings: 20, expiresDays: null, featuredAllowed: true };
+  return { listings: Infinity, expiresDays: null, featuredAllowed: true }; // ENTERPRISE
+}
 
 export async function POST(req: Request) {
   try {
@@ -43,7 +62,8 @@ export async function POST(req: Request) {
     /* ===============================
        VALIDATION
     =============================== */
-    if (!body.title || body.price === undefined || body.price === null) {
+    const title = String(body.title ?? "").trim();
+    if (!title || body.price === undefined || body.price === null) {
       return NextResponse.json(
         { error: "Title and price are required" },
         { status: 400 }
@@ -53,13 +73,22 @@ export async function POST(req: Request) {
     /* ===============================
        GET VENDOR PLAN (AUTO CREATE SAFE)
     =============================== */
-    const { data: vendor } = await supabase
+    const { data: vendor, error: vendorReadErr } = await supabase
       .from("vendors")
       .select("id, plan")
       .eq("id", user.id)
       .maybeSingle();
 
-    let vendorPlan = vendor?.plan ?? "free";
+    if (vendorReadErr) {
+      // If RLS blocks vendor read for some reason, fail clearly
+      console.error("VENDOR READ ERROR:", vendorReadErr);
+      return NextResponse.json(
+        { error: "Unable to verify vendor profile" },
+        { status: 403 }
+      );
+    }
+
+    let vendorPlan: VendorPlan = normalizePlan(vendor?.plan);
 
     if (!vendor) {
       const businessName =
@@ -73,7 +102,7 @@ export async function POST(req: Request) {
         id: user.id,
         business_name: String(businessName).trim(),
         email: user.email ?? null,
-        plan: "free",
+        plan: "FREE", // store as FREE
       });
 
       if (insertError) {
@@ -81,57 +110,66 @@ export async function POST(req: Request) {
 
         return NextResponse.json(
           {
-            error:
-              "Vendor profile setup failed. Please refresh and try again.",
+            error: "Vendor profile setup failed. Please refresh and try again.",
             code: "VENDOR_SETUP_FAILED" as ApiErrorCode,
           },
           { status: 403 }
         );
       }
 
-      vendorPlan = "free";
+      vendorPlan = "FREE";
     }
 
-    const planConfig = PRICING.getPlan(vendorPlan);
+    const limits = planLimits(vendorPlan);
 
     /* ===============================
-       💰 LISTING LIMIT CHECK (MONEY GATE)
+       💰 LISTING LIMIT CHECK (counts ACTIVE listings only)
     =============================== */
-    const { count, error: countError } = await supabase
-      .from("products")
-      .select("*", { count: "exact", head: true })
-      .eq("vendor_id", user.id);
+    const nowIso = new Date().toISOString();
 
-    if (countError) {
-      console.error("LISTING COUNT ERROR:", countError);
-      return NextResponse.json(
-        { error: "Unable to verify listing limit" },
-        { status: 500 }
-      );
-    }
+    // ENTERPRISE unlimited -> skip count check
+    if (Number.isFinite(limits.listings)) {
+      const { count, error: countError } = await supabase
+        .from("products")
+        .select("*", { count: "exact", head: true })
+        .eq("vendor_id", user.id)
+        // active listings only: expires_at is null OR expires_at > now
+        .or(`expires_at.is.null,expires_at.gt.${nowIso}`);
 
-    if ((count ?? 0) >= planConfig.limits.listings) {
-      return NextResponse.json(
-        {
-          error: `Listing limit reached. ${planConfig.name} plan allows only ${planConfig.limits.listings} products. Upgrade to add more.`,
-          code: "LIMIT_REACHED" as ApiErrorCode,
-          plan: planConfig.key,
-          limit: planConfig.limits.listings,
-          current: count ?? 0,
-        },
-        { status: 403 }
-      );
+      if (countError) {
+        console.error("LISTING COUNT ERROR:", countError);
+        return NextResponse.json(
+          { error: "Unable to verify listing limit" },
+          { status: 500 }
+        );
+      }
+
+      if ((count ?? 0) >= limits.listings) {
+        return NextResponse.json(
+          {
+            error:
+              vendorPlan === "FREE"
+                ? "Free plan allows 1 active listing for 7 days. Upgrade to add more."
+                : `Listing limit reached. Your plan allows only ${limits.listings} active products. Upgrade to add more.`,
+            code: "LIMIT_REACHED" as ApiErrorCode,
+            plan: vendorPlan,
+            limit: limits.listings,
+            current: count ?? 0,
+          },
+          { status: 403 }
+        );
+      }
     }
 
     /* ===============================
        FEATURE PERMISSION CHECK
     =============================== */
-    if (body.featured && !planConfig.limits.featured) {
+    if (body.featured && !limits.featuredAllowed) {
       return NextResponse.json(
         {
-          error: "Featured products require PRO or ELITE plan.",
+          error: "Featured products require PRO_FARMER or ENTERPRISE plan.",
           code: "FEATURE_LOCKED" as ApiErrorCode,
-          plan: planConfig.key,
+          plan: vendorPlan,
         },
         { status: 403 }
       );
@@ -144,26 +182,37 @@ export async function POST(req: Request) {
     const discount = Number(body.discount ?? 0);
     const stock = Math.max(0, Number(body.stock ?? 0));
 
+    // Expiry only for FREE
+    const expiresAt =
+      limits.expiresDays === null
+        ? null
+        : new Date(Date.now() + limits.expiresDays * 24 * 60 * 60 * 1000).toISOString();
+
+    // Images: support both body.images[] and body.image
+    const imagesArr = Array.isArray(body.images) ? body.images : [];
+    const firstImage = imagesArr?.[0] ?? body.image ?? null;
+
     /* ===============================
-       PAYLOAD
+       PAYLOAD (SCHEMA-SAFE)
+       NOTE: keep column names aligned with your DB.
+       If your DB column is "title", use "title" (not "name").
     =============================== */
     const payload = {
-      name: String(body.title).trim(),
+      title, // ✅ use "title" to match buyer search/filter + UI
       description: body.description ?? "",
       category: body.category ?? "",
       price,
       discount_price: discount,
       stock,
-
       location: body.location ?? "",
-      delivery: body.delivery ?? null,
-      condition: body.condition ?? null,
-
-      image: body.images?.[0] ?? null,
-      featured: Boolean(body.featured && planConfig.limits.featured),
+      // store either "images" (array) or "image" (single) depending on your DB
+      // If your DB has "images" jsonb, keep it:
+      images: imagesArr.length ? imagesArr : firstImage ? [firstImage] : [],
+      featured: Boolean(body.featured && limits.featuredAllowed),
 
       vendor_id: user.id,
       status: "approved",
+      expires_at: expiresAt, // ✅ Free expires in 7 days, paid null
       created_at: new Date().toISOString(),
     };
 

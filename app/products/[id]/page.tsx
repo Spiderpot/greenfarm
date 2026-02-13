@@ -1,10 +1,6 @@
 import { notFound } from "next/navigation";
-import { supabaseServer } from "@/lib/supabase-server";
+import { createSupabaseServerClient } from "@/lib/supabase-server";
 import VendorContactCTA from "@/components/product/VendorContactCTA";
-
-/* =====================================================
-   Next 16: params is Promise
-===================================================== */
 
 interface PageProps {
   params: Promise<{
@@ -12,45 +8,47 @@ interface PageProps {
   }>;
 }
 
-/* =====================================================
-   Product Detail Page
-===================================================== */
-
 export default async function ProductDetail({ params }: PageProps) {
-  /* ✅ MUST await params in Next 16 */
   const { id } = await params;
-
   if (!id) return notFound();
 
-  /* ✅ Supabase */
-  const supabase = await supabaseServer();
+  const supabase = await createSupabaseServerClient();
 
-  /* ================= Fetch product ================= */
+  /* ================= Fetch product (simple + safe) ================= */
 
   const { data: product, error } = await supabase
     .from("products")
     .select("*")
     .eq("id", id)
-    .maybeSingle();
+    .eq("status", "active")
+    .single();
 
   if (error || !product) {
-    console.error("DETAIL FETCH ERROR:", error);
+    console.error("DETAIL FETCH FAILED:", error);
     return notFound();
   }
 
-  /* ================= Fetch vendor (REAL DB ONLY) ================= */
-  /* 🔥 THIS IS THE IMPORTANT PART */
-  /* We use the REAL Supabase UUID, not vendors.json */
+  /* ================= Expiry Check (JS instead of SQL) ================= */
+  const now = new Date();
+
+  if (
+    product.expires_at &&
+    new Date(product.expires_at) < now
+  ) {
+    return notFound();
+  }
+
+
+  /* ================= Fetch vendor ================= */
 
   const { data: vendor } = await supabase
     .from("vendors")
     .select("*")
-    .eq("id", product.vendor_id) // ✅ already real UUID
+    .eq("id", product.vendor_id)
     .maybeSingle();
 
-  /* ================= Helpers ================= */
-
   const imageUrl = product.image || "/placeholder.png";
+  const isDemo = product.is_demo === true;
 
   const priceDisplay = product.negotiable
     ? "Negotiable"
@@ -58,12 +56,10 @@ export default async function ProductDetail({ params }: PageProps) {
         product.unit ? ` / ${product.unit}` : ""
       }`;
 
-  /* ================= UI ================= */
-
   return (
     <main className="max-w-4xl mx-auto p-6 space-y-8">
-      {/* Image */}
-      <div className="w-full h-72 rounded-2xl overflow-hidden shadow-md">
+
+      <div className="w-full h-56 sm:h-72 md:h-80 rounded-2xl overflow-hidden shadow-md">
         <img
           src={imageUrl}
           alt={product.name}
@@ -71,40 +67,42 @@ export default async function ProductDetail({ params }: PageProps) {
         />
       </div>
 
-      {/* Title */}
       <h1 className="text-2xl font-bold">{product.name}</h1>
 
-      {/* Location */}
       <p className="text-sm text-gray-500">
         📍 {product.location || "Nigeria"}
       </p>
 
-      {/* Price */}
       <p
         className={`font-semibold text-lg ${
-          product.negotiable ? "text-orange-600" : "text-green-600"
+          isDemo
+            ? "text-green-600"
+            : product.negotiable
+            ? "text-orange-600"
+            : "text-green-600"
         }`}
       >
-        {priceDisplay}
+        {isDemo ? "Request Quote" : priceDisplay}
       </p>
 
-      {/* Description */}
       {product.description && (
         <p className="text-gray-700 leading-relaxed">
           {product.description}
         </p>
       )}
 
-      {/* ================= Contact Vendor ================= */}
-
       {vendor && (
         <section className="pt-6 border-t">
-          <h2 className="text-lg font-semibold mb-3">Contact Vendor</h2>
+          <h2 className="text-lg font-semibold mb-3">
+            {isDemo ? "Request Quote" : "Contact Vendor"}
+          </h2>
 
-          {/* ✅ PASS REAL SUPABASE UUID ONLY */}
           <VendorContactCTA
+            productId={product.id}
+            productName={product.name}
+            isDemo={isDemo}
             vendor={{
-              id: vendor.id, // ✅ REAL UUID (FIXED)
+              id: vendor.id,
               business_name: vendor.business_name,
               phone: vendor.phone,
               whatsapp: vendor.whatsapp,

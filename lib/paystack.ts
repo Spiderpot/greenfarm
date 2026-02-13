@@ -73,7 +73,7 @@ export async function payWithPaystack(params: {
 ===================================================== */
 
 export function payForVendorPlan(options: {
-  plan: "pro" | "elite";
+  plan: "PRO_FARMER" | "ENTERPRISE";
   email: string;
   vendorId: string;
 }) {

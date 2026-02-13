@@ -9,11 +9,12 @@ import { supabaseServer } from "@/lib/supabase-server";
 export type CreateLeadInput = {
   productId: string;
   vendorId: string;
-  name: string;        // buyer name
-  phone: string;       // buyer phone
-  message?: string;    // optional message (mobile-first)
-  productName: string;
+  productName?: string; // ✅ OPTIONAL NOW
+  name: string;
+  phone: string;
+  message: string;
 };
+
 
 /* =====================================================
    Create Lead (free optional request form)

@@ -9,7 +9,7 @@ export default function PayToListButton({
 }) {
   function handlePay() {
     payForVendorPlan({
-      plan: "pro", // listing unlocks PRO
+      plan: "PRO_FARMER",
       email: "vendor@greenfarm.app",
       vendorId,
     });

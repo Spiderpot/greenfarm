@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
-
 import ProfileHeader from "@/components/dashboard/layout/ProfileHeader";
 import Link from "next/link";
 import StatsCard from "@/components/vendor/StatsCard";
@@ -26,13 +25,15 @@ export type Lead = {
   buyer_phone: string;
   product_name: string;
   created_at: string;
+  contacted?: boolean;
+  unlocked?: boolean;
 };
 
 type Vendor = {
   id?: string | null;
   email?: string | null;
   is_verified?: boolean | null;
-  plan?: "free" | "pro" | "elite" | null;
+  plan?: string | null;
   plan_expires_at?: string | null;
   monthly_product_limit?: number | null;
 } | null;
@@ -40,11 +41,8 @@ type Vendor = {
 type Props = {
   vendor: Vendor;
   leads: Lead[];
-  userEmail?: string;
-  isPro?: boolean;
-  isElite?: boolean;
+  earnings: number; // ✅ FIXED
 };
-
 
 /* =====================================================
    COMPONENT
@@ -53,10 +51,13 @@ type Props = {
 export default function VendorDashboardClient({
   vendor,
   leads,
+  earnings, // ✅ FIXED
 }: Props) {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState<string | null>(null);
   const params = useSearchParams();
+
+  /* ================= PAYMENT VERIFY ================= */
 
   useEffect(() => {
     const ref = params.get("reference") || params.get("trxref");
@@ -76,14 +77,10 @@ export default function VendorDashboardClient({
 
       alert(`✅ Upgrade successful: ${String(data.plan).toUpperCase()}`);
 
-      // Clean URL (remove ?reference=...) without a full reload
       window.history.replaceState({}, "", "/vendor/dashboard");
-
-      // Hard refresh optional if your server page needs to re-fetch vendor plan:
       window.location.reload();
     })();
   }, [params]);
-
 
   /* =====================================================
      CORE VALUES
@@ -92,11 +89,14 @@ export default function VendorDashboardClient({
   const vendorId = vendor?.id ?? "";
   const paymentEmail = vendor?.email || "vendor@greenfarm.ng";
 
-  const plan = vendor?.plan ?? "free";
-  const limit = vendor?.monthly_product_limit ?? 5;
+  const rawPlan = vendor?.plan ?? "FREE";
+  const currentPlan = PRICING.getPlan(rawPlan);
 
-  const isFree = plan === "free";
-  const isElite = plan === "elite";
+  const planKey = currentPlan.key;
+  const limit = currentPlan.limits.listings;
+
+  const isFree = planKey === "FREE";
+  const isEnterprise = planKey === "ENTERPRISE";
 
   /* =====================================================
      FILTER LEADS
@@ -118,7 +118,7 @@ export default function VendorDashboardClient({
      PAYMENT
   ===================================================== */
 
-  function upgradePlan(p: "pro" | "elite") {
+  function upgradePlan(p: "PRO_FARMER" | "ENTERPRISE") {
     if (!vendorId) {
       alert("Vendor not ready. Please login again.");
       return;
@@ -140,15 +140,12 @@ export default function VendorDashboardClient({
   return (
     <div className="space-y-8 w-full text-gray-900">
 
-      {/* ================= HEADER + ACTIONS ================= */}
+      {/* ================= HEADER ================= */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
 
-        {/* Left side */}
         <ProfileHeader />
 
-        {/* Right side buttons */}
         <div className="flex gap-3">
-
           <Link
             href="/vendor/products/new"
             className="bg-green-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-green-700 transition"
@@ -162,58 +159,55 @@ export default function VendorDashboardClient({
           >
             Manage Products
           </Link>
-
         </div>
       </div>
-
 
       {/* ================= PLAN SECTION ================= */}
 
       <div className="bg-white border rounded-xl p-5 space-y-5">
-
         <h2 className="font-semibold text-sm">Subscription Plan</h2>
 
         <p className="text-sm">
           Current Plan:{" "}
-          <span className="font-semibold uppercase">{plan}</span>
+          <span className="font-semibold uppercase">{planKey}</span>
         </p>
-
-        {/* ---------- FREE → show upgrade ---------- */}
 
         {isFree && (
           <div className="grid gap-4 md:grid-cols-2">
 
             <div className="border rounded-lg p-4 space-y-3">
-              <h3 className="font-semibold text-base">Pro</h3>
-
+              <h3 className="font-semibold text-base">Pro Farmer</h3>
               <p className="text-xs text-gray-500">
-                50 listings • Featured products • Analytics
+                20 listings • No expiry • Featured products
               </p>
 
               <Button
-                onClick={() => upgradePlan("pro")}
-                disabled={loading === "pro"}
+                onClick={() => upgradePlan("PRO_FARMER")}
+                disabled={loading === "PRO_FARMER"}
               >
-                {loading === "pro"
+                {loading === "PRO_FARMER"
                   ? "Processing..."
-                  : `Upgrade – ${PRICING.format(PRICING.vendorPlans.pro.price)} / month`}
+                  : `Upgrade – ${PRICING.format(
+                      PRICING.getPlan("PRO_FARMER").price
+                    )} / month`}
               </Button>
             </div>
 
             <div className="border rounded-lg p-4 space-y-3">
-              <h3 className="font-semibold text-base">Elite</h3>
-
+              <h3 className="font-semibold text-base">Enterprise</h3>
               <p className="text-xs text-gray-500">
-                Unlimited • Homepage boost • Priority leads
+                Unlimited listings • Priority placement • 3% commission (escrow soon)
               </p>
 
               <Button
-                onClick={() => upgradePlan("elite")}
-                disabled={loading === "elite"}
+                onClick={() => upgradePlan("ENTERPRISE")}
+                disabled={loading === "ENTERPRISE"}
               >
-                {loading === "elite"
+                {loading === "ENTERPRISE"
                   ? "Processing..."
-                  : `Upgrade – ${PRICING.format(PRICING.vendorPlans.elite.price)} / month`}
+                  : `Upgrade – ${PRICING.format(
+                      PRICING.getPlan("ENTERPRISE").price
+                    )} / month`}
               </Button>
             </div>
 
@@ -231,23 +225,19 @@ export default function VendorDashboardClient({
 
       <div className="grid gap-4 md:grid-cols-4">
 
-        <StatsCard
-          label="Leads"
-          value={filtered.length}
-          icon="📞"
-        />
+        <StatsCard label="Leads" value={filtered.length} icon="📞" />
 
         <StatsCard
           label="Listings Used"
-          value={isElite ? "Unlimited" : `${leads.length} / ${limit}`}
+          value={
+            isEnterprise
+              ? "Unlimited"
+              : `${leads.length} / ${limit}`
+          }
           icon="📦"
         />
 
-        <StatsCard
-          label="Plan"
-          value={plan.toUpperCase()}
-          icon="⭐"
-        />
+        <StatsCard label="Plan" value={planKey} icon="⭐" />
 
         <StatsCard
           label="Expires"
@@ -258,13 +248,14 @@ export default function VendorDashboardClient({
           }
           icon="📅"
         />
-
-        <EarningsCard />
       </div>
+
+      {/* ✅ Earnings now separate and correct */}
+      <EarningsCard amount={earnings} />
 
       {/* ================= ANALYTICS LOCK ================= */}
 
-      {!isFree && <LeadsChart leads={filtered} />}
+      {planKey !== "FREE" && <LeadsChart leads={filtered} />}
 
       {/* ================= SEARCH ================= */}
 

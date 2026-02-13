@@ -44,7 +44,8 @@ export default async function VendorDashboard() {
 
   /* ================= DATA ================= */
 
-  const { vendor, leads } = await getVendorDashboardData(user.id);
+  const { vendor, leads, earnings } =
+    await getVendorDashboardData(user.id);
 
   if (!vendor) redirect("/login");
 
@@ -52,7 +53,11 @@ export default async function VendorDashboard() {
 
   return (
     <DashboardLayout>
-      <VendorDashboardClient vendor={vendor} leads={leads} />
+      <VendorDashboardClient
+        vendor={vendor}
+        leads={leads}
+        earnings={earnings}
+      />
     </DashboardLayout>
   );
 }
