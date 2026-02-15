@@ -4,18 +4,18 @@ import { createSupabaseServerClient } from "@/lib/supabase-server";
 export const dynamic = "force-dynamic";
 
 /* =====================================================
-   DB Product type (Aligned with your schema)
+   DB Product type (Aligned with PRODUCTION schema)
 ===================================================== */
 
 interface DbProduct {
   id: string;
-  name: string;
+  title: string; // ✅ production uses title
   vendor_id: string;
 
   category?: string | null;
   location?: string | null;
 
-  image?: string | null;
+  images?: string[] | null; // ✅ production uses images array
 
   price?: number | null;
   unit?: string | null;
@@ -29,7 +29,7 @@ interface DbProduct {
 }
 
 /* =====================================================
-   Fetch ACTIVE + NON-EXPIRED products
+   Fetch APPROVED + NON-EXPIRED products
 ===================================================== */
 
 async function getProducts(): Promise<DbProduct[]> {
@@ -40,7 +40,7 @@ async function getProducts(): Promise<DbProduct[]> {
   const { data, error } = await supabase
     .from("products")
     .select("*")
-    .eq("status", "active")
+    .eq("status", "approved") // ✅ production status
     .or(`expires_at.is.null,expires_at.gt.${nowIso}`)
     .order("featured", { ascending: false })
     .order("created_at", { ascending: false });
@@ -64,7 +64,6 @@ export default async function ProductsPage() {
     <main className="min-h-screen p-6">
       <h1 className="mb-2 text-2xl font-bold">Products</h1>
 
-      {/* 🔒 Escrow Banner */}
       <p className="mb-6 text-sm text-gray-500">
         🔒 Secure Escrow Payments —{" "}
         <span className="font-medium">Coming Soon</span>
@@ -82,21 +81,29 @@ export default async function ProductsPage() {
             key={p.id}
             product={{
               id: p.id,
-              name: p.name,
+
+              // ✅ map title → name (UI expects name)
+              name: p.title,
+
               category: p.category ?? "general",
               location: p.location ?? "Nigeria",
-              images: [p.image ?? "/placeholder.png"],
 
-              // ✅ Convert null → undefined safely
+              // ✅ safe images array handling
+              images:
+                p.images && p.images.length > 0
+                  ? p.images
+                  : ["/placeholder.png"],
+
+              // ✅ demo protection
               price: p.is_demo ? undefined : p.price ?? undefined,
               discount_price: p.is_demo
                 ? undefined
                 : p.discount_price ?? undefined,
+
               unit: p.unit ?? undefined,
               negotiable: p.negotiable ?? true,
               featured: p.featured ?? false,
 
-              // ✅ Fix TypeScript issue here
               is_demo: p.is_demo ?? undefined,
             }}
             featured={Boolean(p.featured)}
