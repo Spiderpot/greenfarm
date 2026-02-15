@@ -81,30 +81,20 @@ export default async function ProductsPage() {
             key={p.id}
             product={{
               id: p.id,
-
-              // ✅ map title → name (UI expects name)
-              name: p.title,
-
+              name: p.title, // ✅ FIXED
               category: p.category ?? "general",
               location: p.location ?? "Nigeria",
-
-              // ✅ safe images array handling
               images:
                 p.images && p.images.length > 0
                   ? p.images
                   : ["/placeholder.png"],
 
-              // ✅ demo protection
-              price: p.is_demo ? undefined : p.price ?? undefined,
-              discount_price: p.is_demo
-                ? undefined
-                : p.discount_price ?? undefined,
+              price: p.price ? Number(p.price) : undefined,
+              discount_price: p.discount_price
+                ? Number(p.discount_price)
+                : undefined,
 
-              unit: p.unit ?? undefined,
-              negotiable: p.negotiable ?? true,
               featured: p.featured ?? false,
-
-              is_demo: p.is_demo ?? undefined,
             }}
             featured={Boolean(p.featured)}
           />
