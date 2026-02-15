@@ -4,32 +4,29 @@ import { createSupabaseServerClient } from "@/lib/supabase-server";
 export const dynamic = "force-dynamic";
 
 /* =====================================================
-   DB Product type (Aligned with PRODUCTION schema)
+   DB Product type (REAL SCHEMA)
 ===================================================== */
 
 interface DbProduct {
   id: string;
-  title: string; // ✅ production uses title
+  title: string; // ✅ correct column
   vendor_id: string;
 
   category?: string | null;
   location?: string | null;
 
-  images?: string[] | null; // ✅ production uses images array
+  images?: string[] | null; // ✅ array
 
   price?: number | null;
-  unit?: string | null;
-  negotiable?: boolean | null;
   discount_price?: number | null;
   featured?: boolean | null;
 
   status?: string | null;
   expires_at?: string | null;
-  is_demo?: boolean | null;
 }
 
 /* =====================================================
-   Fetch APPROVED + NON-EXPIRED products
+   Fetch APPROVED + NON-EXPIRED
 ===================================================== */
 
 async function getProducts(): Promise<DbProduct[]> {
@@ -40,7 +37,7 @@ async function getProducts(): Promise<DbProduct[]> {
   const { data, error } = await supabase
     .from("products")
     .select("*")
-    .eq("status", "approved") // ✅ production status
+    .eq("status", "approved")
     .or(`expires_at.is.null,expires_at.gt.${nowIso}`)
     .order("featured", { ascending: false })
     .order("created_at", { ascending: false });
@@ -65,8 +62,7 @@ export default async function ProductsPage() {
       <h1 className="mb-2 text-2xl font-bold">Products</h1>
 
       <p className="mb-6 text-sm text-gray-500">
-        🔒 Secure Escrow Payments —{" "}
-        <span className="font-medium">Coming Soon</span>
+        🔒 Secure Escrow Payments — <span className="font-medium">Coming Soon</span>
       </p>
 
       {products.length === 0 && (
@@ -81,19 +77,15 @@ export default async function ProductsPage() {
             key={p.id}
             product={{
               id: p.id,
-              name: p.title, // ✅ FIXED
+              name: p.title, // ✅ map title → name
               category: p.category ?? "general",
               location: p.location ?? "Nigeria",
-              images:
-                p.images && p.images.length > 0
-                  ? p.images
-                  : ["/placeholder.png"],
+              images: p.images?.length
+                ? p.images
+                : ["/placeholder.png"],
 
-              price: p.price ? Number(p.price) : undefined,
-              discount_price: p.discount_price
-                ? Number(p.discount_price)
-                : undefined,
-
+              price: p.price ?? undefined,
+              discount_price: p.discount_price ?? undefined,
               featured: p.featured ?? false,
             }}
             featured={Boolean(p.featured)}

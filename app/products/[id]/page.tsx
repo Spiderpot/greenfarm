@@ -14,30 +14,23 @@ export default async function ProductDetail({ params }: PageProps) {
 
   const supabase = await createSupabaseServerClient();
 
-  /* ================= Fetch product (simple + safe) ================= */
+  /* ================= Fetch product ================= */
 
   const { data: product, error } = await supabase
     .from("products")
     .select("*")
     .eq("id", id)
-    .eq("status", "active")
-    .single();
+    .eq("status", "approved") // ✅ match list page
+    .maybeSingle(); // ✅ safe
 
-  if (error || !product) {
-    console.error("DETAIL FETCH FAILED:", error);
+  if (error) {
+    console.error("DETAIL FETCH ERROR:", error);
     return notFound();
   }
 
-  /* ================= Expiry Check (JS instead of SQL) ================= */
-  const now = new Date();
-
-  if (
-    product.expires_at &&
-    new Date(product.expires_at) < now
-  ) {
+  if (!product) {
     return notFound();
   }
-
 
   /* ================= Fetch vendor ================= */
 
@@ -47,32 +40,46 @@ export default async function ProductDetail({ params }: PageProps) {
     .eq("id", product.vendor_id)
     .maybeSingle();
 
-  const imageUrl = product.image || "/placeholder.png";
+  /* ================= Safe Data Handling ================= */
+
+  const imageUrl =
+    product.images?.[0] || product.image || "/placeholder.png";
+
   const isDemo = product.is_demo === true;
+
+  const hasDiscount =
+    product.discount_price &&
+    product.price &&
+    product.discount_price < product.price;
 
   const priceDisplay = product.negotiable
     ? "Negotiable"
-    : `₦${(product.discount_price ?? product.price)?.toLocaleString()}${
-        product.unit ? ` / ${product.unit}` : ""
-      }`;
+    : hasDiscount
+    ? `₦${product.discount_price?.toLocaleString()}`
+    : product.price
+    ? `₦${product.price.toLocaleString()}`
+    : "";
 
   return (
     <main className="max-w-4xl mx-auto p-6 space-y-8">
-
+      {/* ================= Image ================= */}
       <div className="w-full h-56 sm:h-72 md:h-80 rounded-2xl overflow-hidden shadow-md">
         <img
           src={imageUrl}
-          alt={product.name}
+          alt={product.title}
           className="w-full h-full object-cover"
         />
       </div>
 
-      <h1 className="text-2xl font-bold">{product.name}</h1>
+      {/* ================= Title ================= */}
+      <h1 className="text-2xl font-bold">{product.title}</h1>
 
+      {/* ================= Location ================= */}
       <p className="text-sm text-gray-500">
         📍 {product.location || "Nigeria"}
       </p>
 
+      {/* ================= Price ================= */}
       <p
         className={`font-semibold text-lg ${
           isDemo
@@ -83,14 +90,22 @@ export default async function ProductDetail({ params }: PageProps) {
         }`}
       >
         {isDemo ? "Request Quote" : priceDisplay}
+        {!isDemo && product.unit && (
+          <span className="text-sm text-gray-500">
+            {" "}
+            / {product.unit}
+          </span>
+        )}
       </p>
 
+      {/* ================= Description ================= */}
       {product.description && (
         <p className="text-gray-700 leading-relaxed">
           {product.description}
         </p>
       )}
 
+      {/* ================= Contact Section ================= */}
       {vendor && (
         <section className="pt-6 border-t">
           <h2 className="text-lg font-semibold mb-3">
@@ -99,7 +114,7 @@ export default async function ProductDetail({ params }: PageProps) {
 
           <VendorContactCTA
             productId={product.id}
-            productName={product.name}
+            productName={product.title}
             isDemo={isDemo}
             vendor={{
               id: vendor.id,
