@@ -56,6 +56,9 @@ export default function ProductCard({
     product.discount_price < product.price;
 
   const imageSrc = product.images?.[0] || "/placeholder.png";
+  console.log("PRODUCT NAME:", product.name);
+  console.log("RAW IMAGES ARRAY:", product.images);
+  console.log("IMAGE SRC USED:", imageSrc);
 
   return (
     <Link

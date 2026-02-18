@@ -82,9 +82,9 @@ export default function Home() {
 
             {[
               "/products/tomatoes.jpg",
-              "/products/maize.jpg",
-              "/products/rice.jpg",
-              "/products/pepper.jpg",
+              "/products/maize-yellow.jpg",
+              "/products/white-rice.jpg",
+              "/products/fertilizer.jpg",
             ].map((src, i) => (
               <div
                 key={i}
