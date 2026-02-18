@@ -15,7 +15,7 @@ export default function useTableFilter<
   return useMemo(() => {
     if (!search.trim()) return data;
 
-    const q = search.toLowerCase().trim();
+    const q = (search ?? "").toLowerCase().trim();
 
     return data.filter((item) =>
       Object.values(item).some((value) => {

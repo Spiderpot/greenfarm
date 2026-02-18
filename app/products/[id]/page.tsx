@@ -20,7 +20,7 @@ export default async function ProductDetail({ params }: PageProps) {
     .from("products")
     .select("*")
     .eq("id", id)
-    .eq("status", "approved") // ✅ match list page
+    .eq("status", "published")
     .maybeSingle(); // ✅ safe
 
   if (error) {

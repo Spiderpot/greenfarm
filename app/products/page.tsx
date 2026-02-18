@@ -2,6 +2,7 @@ import ProductCard from "@/components/product/ProductCard";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 /* =====================================================
    DB Product type (REAL SCHEMA)
@@ -9,13 +10,13 @@ export const dynamic = "force-dynamic";
 
 interface DbProduct {
   id: string;
-  title: string; // ✅ correct column
+  title: string;
   vendor_id: string;
 
   category?: string | null;
   location?: string | null;
 
-  images?: string[] | null; // ✅ array
+  images?: string[] | null;
 
   price?: number | null;
   discount_price?: number | null;
@@ -26,19 +27,17 @@ interface DbProduct {
 }
 
 /* =====================================================
-   Fetch APPROVED + NON-EXPIRED
+   Fetch PUBLISHED ONLY (STABLE VERSION)
+   🔥 Expiry filter removed for stability
 ===================================================== */
 
 async function getProducts(): Promise<DbProduct[]> {
   const supabase = await createSupabaseServerClient();
 
-  const nowIso = new Date().toISOString();
-
   const { data, error } = await supabase
     .from("products")
     .select("*")
-    .eq("status", "approved")
-    .or(`expires_at.is.null,expires_at.gt.${nowIso}`)
+    .eq("status", "published")
     .order("featured", { ascending: false })
     .order("created_at", { ascending: false });
 
@@ -62,7 +61,8 @@ export default async function ProductsPage() {
       <h1 className="mb-2 text-2xl font-bold">Products</h1>
 
       <p className="mb-6 text-sm text-gray-500">
-        🔒 Secure Escrow Payments — <span className="font-medium">Coming Soon</span>
+        🔒 Secure Escrow Payments —{" "}
+        <span className="font-medium">Coming Soon</span>
       </p>
 
       {products.length === 0 && (
@@ -77,13 +77,13 @@ export default async function ProductsPage() {
             key={p.id}
             product={{
               id: p.id,
-              name: p.title, // ✅ map title → name
+              name: p.title,
               category: p.category ?? "general",
               location: p.location ?? "Nigeria",
-              images: p.images?.length
-                ? p.images
-                : ["/placeholder.png"],
-
+              images:
+                Array.isArray(p.images) && p.images.length > 0
+                  ? p.images
+                  : ["/placeholder.png"],
               price: p.price ?? undefined,
               discount_price: p.discount_price ?? undefined,
               featured: p.featured ?? false,

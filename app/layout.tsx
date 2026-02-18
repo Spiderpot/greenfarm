@@ -82,6 +82,18 @@ export default function RootLayout({
           src="https://js.paystack.co/v1/inline.js"
           strategy="beforeInteractive"
         />
+        <Script
+          src="https://www.googletagmanager.com/gtag/js?id=G-P43X3MHVE1"
+          strategy="afterInteractive"
+        />
+        <Script id="google-analytics" strategy="afterInteractive">
+          {`
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            gtag('js', new Date());
+            gtag('config', 'G-P43X3MHVE1');
+          `}
+        </Script>
       </body>
     </html>
   );

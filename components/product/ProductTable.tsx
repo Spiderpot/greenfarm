@@ -23,10 +23,12 @@ export default function ProductTable({ products }: Props) {
      FILTER LOGIC
   =============================== */
   const filtered = useMemo(() => {
+    const q = (search ?? "").toLowerCase();
+
     return products.filter((p) => {
-      const matchesSearch = p.name
-        .toLowerCase()
-        .includes(search.toLowerCase());
+      const name = (p?.name ?? "").toLowerCase();
+
+      const matchesSearch = name.includes(q);
 
       const matchesCategory =
         category === "all" || p.category === category;
@@ -39,6 +41,8 @@ export default function ProductTable({ products }: Props) {
       return matchesSearch && matchesCategory && matchesStock;
     });
   }, [products, search, category, stockFilter]);
+
+
 
   async function handleDelete(id: string) {
     if (!confirm("Delete this product?")) return;
